@@ -105,7 +105,7 @@ StatementOptions& statementOptions(int which)
 
 using StatementBuilder = rpt::Report (*)(cb4sqlite::Code4&, const ReportContext&, const StatementOptions&);
 
-void runStatement(fx::MdiFrame& frame, int which, const wchar_t* title, StatementBuilder builder)
+void runStatement(fx::PageHost& frame, int which, const wchar_t* title, StatementBuilder builder)
 {
     RunReport(
         frame,
@@ -115,8 +115,9 @@ void runStatement(fx::MdiFrame& frame, int which, const wchar_t* title, Statemen
         [which, builder](const ReportContext& ctx) { return builder(cb, ctx, statementOptions(which)); });
 }
 
-// A frame for /stress that isn't the main window (no WM_QUIT when destroyed).
-class StressFrame : public fx::MdiFrame {
+// A hidden workspace for /stress: the previews open as its tabs, as in the
+// program (spec #8 S8-M0). Not the main window: no WM_QUIT when destroyed.
+class StressFrame : public fx::Workspace {
 protected:
     bool OnDestroy() override { return true; }
 };
@@ -128,7 +129,7 @@ int guiObjects()
 }
 
 // One preview: open, page through at each zoom (painting each page), close.
-bool stressOnce(fx::MdiFrame& frame, const ReportBuilder& builder)
+bool stressOnce(fx::PageHost& frame, const ReportBuilder& builder)
 {
     HWND p = rpt::win32::OpenPreview(frame, builder(CurrentReportContext()));
     if (!p) return false;
@@ -144,21 +145,21 @@ bool stressOnce(fx::MdiFrame& frame, const ReportBuilder& builder)
         if (view) SendMessageW(view, WM_KEYDOWN, VK_HOME, 0);
         rpt::win32::CyclePreviewZoom(p);
     }
-    SendMessageW(frame.mdiClient(), WM_MDIDESTROY, reinterpret_cast<WPARAM>(p), 0);
+    frame.ClosePage(p);
     return !IsWindow(p);
 }
 
 } // namespace
 
-void RunReport(fx::MdiFrame& frame, ReportOptionsFn options, ReportBuilder builder)
+void RunReport(fx::PageHost& frame, ReportOptionsFn options, ReportBuilder builder)
 {
-    std::optional<rpt::Report> r = build(frame.hwnd(), options, builder);
+    std::optional<rpt::Report> r = build(frame.hostWindow(), options, builder);
     if (!r) return;
     rpt::win32::Rebuild rebuild;
     if (options)
         rebuild = [options, builder](HWND owner) { return build(owner, options, builder); };
     if (!rpt::win32::OpenPreview(frame, std::move(*r), std::move(rebuild)))
-        MessageBoxW(frame.hwnd(), L"The report preview could not be opened.", szApp, MB_OK | MB_ICONSTOP);
+        MessageBoxW(frame.hostWindow(), L"The report preview could not be opened.", szApp, MB_OK | MB_ICONSTOP);
 }
 
 ReportContext CurrentReportContext()
@@ -166,20 +167,20 @@ ReportContext CurrentReportContext()
     return LoadReportContext(cb, today());
 }
 
-void RunSampleReport(fx::MdiFrame& frame)
+void RunSampleReport(fx::PageHost& frame)
 {
     auto [options, builder] = sampleReport();
     RunReport(frame, std::move(options), std::move(builder));
 }
 
-void RunTrialBalance(fx::MdiFrame& frame)
+void RunTrialBalance(fx::PageHost& frame)
 {
     RunReport(
         frame, [](HWND owner) { return ShowTrialBalanceOptions(owner, CurrentReportContext(), trialBalanceOptions()); },
         [](const ReportContext& ctx) { return TrialBalance(cb, ctx, trialBalanceOptions()); });
 }
 
-void RunDistributionTrialBalance(fx::MdiFrame& frame)
+void RunDistributionTrialBalance(fx::PageHost& frame)
 {
     RunReport(
         frame,
@@ -187,72 +188,72 @@ void RunDistributionTrialBalance(fx::MdiFrame& frame)
         [](const ReportContext& ctx) { return DistributionTrialBalance(cb, ctx, distTrialBalanceOptions()); });
 }
 
-void RunIncomeStatement(fx::MdiFrame& frame) { runStatement(frame, 0, L"Income Statement", &IncomeStatement); }
-void RunBalanceSheet(fx::MdiFrame& frame) { runStatement(frame, 1, L"Balance Sheet", &BalanceSheet); }
-void RunCashFlowStatement(fx::MdiFrame& frame) { runStatement(frame, 2, L"Cash Flow Statement", &CashFlowStatement); }
+void RunIncomeStatement(fx::PageHost& frame) { runStatement(frame, 0, L"Income Statement", &IncomeStatement); }
+void RunBalanceSheet(fx::PageHost& frame) { runStatement(frame, 1, L"Balance Sheet", &BalanceSheet); }
+void RunCashFlowStatement(fx::PageHost& frame) { runStatement(frame, 2, L"Cash Flow Statement", &CashFlowStatement); }
 
-void RunTrialBalanceByDept(fx::MdiFrame& frame)
+void RunTrialBalanceByDept(fx::PageHost& frame)
 {
     RunReport(frame, {}, [](const ReportContext& ctx) { return TrialBalanceByDept(cb, ctx); });
 }
 
-void RunChartOfAccountsReport(fx::MdiFrame& frame)
+void RunChartOfAccountsReport(fx::PageHost& frame)
 {
     RunReport(frame, {}, [](const ReportContext& ctx) { return ChartOfAccountsReport(cb, ctx); });
 }
 
-void RunBudgetReport(fx::MdiFrame& frame)
+void RunBudgetReport(fx::PageHost& frame)
 {
     RunReport(frame, {}, [](const ReportContext& ctx) { return BudgetReport(cb, ctx); });
 }
 
-void RunVoucherSlips(fx::MdiFrame& frame)
+void RunVoucherSlips(fx::PageHost& frame)
 {
     RunReport(frame, {}, [](const ReportContext& ctx) { return VoucherSlips(cb, ctx); });
 }
 
-void RunVoucherDetail(fx::MdiFrame& frame)
+void RunVoucherDetail(fx::PageHost& frame)
 {
     RunReport(frame, {}, [](const ReportContext& ctx) { return VoucherDetail(cb, ctx); });
 }
 
-void RunVoucherSummary(fx::MdiFrame& frame)
+void RunVoucherSummary(fx::PageHost& frame)
 {
     RunReport(frame, {}, [](const ReportContext& ctx) { return VoucherSummary(cb, ctx); });
 }
 
-void RunPrepostingDistribution(fx::MdiFrame& frame)
+void RunPrepostingDistribution(fx::PageHost& frame)
 {
     RunReport(frame, {}, [](const ReportContext& ctx) { return PrepostingDistribution(cb, ctx); });
 }
 
-void RunPrePostingReport(fx::MdiFrame& frame)
+void RunPrePostingReport(fx::PageHost& frame)
 {
     RunReport(frame, {}, [](const ReportContext& ctx) { return PrePostingReport(cb, ctx); });
 }
 
-void RunMedicalRepsListing(fx::MdiFrame& frame)
+void RunMedicalRepsListing(fx::PageHost& frame)
 {
     RunReport(frame, {}, [](const ReportContext& ctx) { return MedicalRepsListing(cb, ctx); });
 }
 
-void RunProductCodesListing(fx::MdiFrame& frame)
+void RunProductCodesListing(fx::PageHost& frame)
 {
     RunReport(frame, {}, [](const ReportContext& ctx) { return ProductCodesListing(cb, ctx); });
 }
 
-void RunDoctorCodesListing(fx::MdiFrame& frame)
+void RunDoctorCodesListing(fx::PageHost& frame)
 {
     RunReport(frame, {}, [](const ReportContext& ctx) { return DoctorCodesListing(cb, ctx); });
 }
 
-void RunFixedAssetListing(fx::MdiFrame& frame)
+void RunFixedAssetListing(fx::PageHost& frame)
 {
     EnsureAssetTables(cb);
     RunReport(frame, {}, [](const ReportContext& ctx) { return FixedAssetListing(cb, ctx); });
 }
 
-void RunFixedAssetTypes(fx::MdiFrame& frame)
+void RunFixedAssetTypes(fx::PageHost& frame)
 {
     EnsureAssetTables(cb);
     RunReport(frame, {}, [](const ReportContext& ctx) { return FixedAssetTypesListing(cb, ctx); });
@@ -295,7 +296,7 @@ const ApReportEntry kArReportTable[] = {
 
 }   // namespace
 
-bool RunApReport(fx::MdiFrame& frame, WORD id)
+bool RunApReport(fx::PageHost& frame, WORD id)
 {
     for (const ApReportEntry& r : kApReportTable)
         if (r.id == id) {
@@ -307,7 +308,7 @@ bool RunApReport(fx::MdiFrame& frame, WORD id)
     return false;
 }
 
-bool RunArReport(fx::MdiFrame& frame, WORD id)
+bool RunArReport(fx::PageHost& frame, WORD id)
 {
     for (const ApReportEntry& r : kArReportTable)
         if (r.id == id) {
@@ -319,7 +320,7 @@ bool RunArReport(fx::MdiFrame& frame, WORD id)
     return false;
 }
 
-void RunUserReport(fx::MdiFrame& frame, long number)
+void RunUserReport(fx::PageHost& frame, long number)
 {
     std::optional<rw::StoredDefinition> stored;
     rw::BuildResult b;
@@ -327,13 +328,13 @@ void RunUserReport(fx::MdiFrame& frame, long number)
     try {
         stored = rw::FindDefinition(cb, number);
         if (!stored) {
-            MessageBoxW(frame.hwnd(), L"The report is no longer on file.", szApp, MB_OK | MB_ICONINFORMATION);
+            MessageBoxW(frame.hostWindow(), L"The report is no longer on file.", szApp, MB_OK | MB_ICONINFORMATION);
             return;
         }
         name = stored->name;
         const rw::ParseResult p = rw::ParseDefinition(stored->text);
         if (!p.definition) {
-            MessageBoxW(frame.hwnd(),
+            MessageBoxW(frame.hostWindow(),
                         fx::Format(L"The report \u201C%s\u201D can't be read (line %d):\n\n%s",
                                    fx::Utf8ToWide(name).c_str(), p.line, fx::Utf8ToWide(p.error).c_str())
                             .c_str(),
@@ -358,12 +359,12 @@ void RunUserReport(fx::MdiFrame& frame, long number)
         }
         b = rw::BuildReport(cb, CurrentReportContext(), *p.definition);
     } catch (const std::exception& e) {
-        MessageBoxW(frame.hwnd(), (L"The report could not be prepared:\n\n" + fx::Utf8ToWide(e.what())).c_str(), szApp,
+        MessageBoxW(frame.hostWindow(), (L"The report could not be prepared:\n\n" + fx::Utf8ToWide(e.what())).c_str(), szApp,
                     MB_OK | MB_ICONSTOP);
         return;
     }
     if (!b.report) {
-        MessageBoxW(frame.hwnd(),
+        MessageBoxW(frame.hostWindow(),
                     fx::Format(L"\u201C%s\u201D:\n\n%s", fx::Utf8ToWide(name).c_str(), fx::Utf8ToWide(b.refusal).c_str())
                         .c_str(),
                     szApp, MB_OK | MB_ICONINFORMATION);
@@ -376,9 +377,9 @@ void RunUserReport(fx::MdiFrame& frame, long number)
 int StressReports(int times)
 {
     StressFrame frame;
-    if (!frame.CreateFrame(hInst, L"GLReportStress", L"Report stress", nullptr, -1)) return -1;
-    SetWindowPos(frame.hwnd(), nullptr, 0, 0, 900, 700, SWP_NOZORDER | SWP_NOACTIVATE);
-    ShowWindow(frame.hwnd(), SW_SHOWNOACTIVATE);   // hidden windows don't paint
+    if (!frame.CreateWorkspace(hInst, L"GLReportStress", L"Report stress", nullptr, -1)) return -1;
+    SetWindowPos(frame.hostWindow(), nullptr, 0, 0, 900, 700, SWP_NOZORDER | SWP_NOACTIVATE);
+    ShowWindow(frame.hostWindow(), SW_SHOWNOACTIVATE);   // hidden windows don't paint
     SampleOptions three;
     three.repeat = 3;
     DistTrialBalanceOptions lines;
@@ -444,6 +445,6 @@ int StressReports(int times)
         for (int i = 0; i < times && ok; ++i) ok = round();
         if (ok) growth = guiObjects() - before;
     }
-    DestroyWindow(frame.hwnd());
+    DestroyWindow(frame.hostWindow());
     return growth;
 }

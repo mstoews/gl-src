@@ -299,8 +299,8 @@ void mdiInstances(HINSTANCE inst, Results& r)
     r.check(frame.CreateFrame(inst, L"TrivialProbeFrame", L"probe", nullptr, -1) != nullptr, L"MdiFrame created");
     if (!frame.hwnd()) return;
     ProbeChild one, two;
-    HWND h1 = one.CreateChild(frame, L"TrivialProbeChild", L"one");
-    HWND h2 = two.CreateChild(frame, L"TrivialProbeChild", L"two");
+    HWND h1 = one.CreatePage(frame, L"TrivialProbeChild", L"one");
+    HWND h2 = two.CreatePage(frame, L"TrivialProbeChild", L"two");
     r.check(h1 && h2 && h1 != h2, L"two MDI children of one window class");
     SendMessageW(h1, WM_COMMAND, 42, 0);
     SendMessageW(h2, WM_COMMAND, 42, 0);

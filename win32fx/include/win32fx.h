@@ -13,14 +13,17 @@
 
 #include "Dialog.h"
 #include "HandleGuard.h"
+#include "Dock.h"
 #include "MdiFrame.h"
 #include "MessageLoop.h"
 #include "MsgMap.h"
+#include "PageHost.h"
 #include "StatusBar.h"
 #include "StringUtil.h"
 #include "Toolbar.h"
 #include "Verify.h"
 #include "Window.h"
+#include "Workspace.h"
 #include "controls/CustomControls.h"
 #include "controls/Grid.h"
 

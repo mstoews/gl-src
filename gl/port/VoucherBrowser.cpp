@@ -24,7 +24,7 @@ constexpr int kGridId = 100;
 constexpr COLORREF kPostedText = RGB(96, 96, 96);
 constexpr COLORREF kWhite = RGB(255, 255, 255);
 
-class VoucherBrowser : public fx::MdiChild {
+class VoucherBrowser : public fx::HostedPage {
 public:
     bool selfOwned = false;   // set once the window exists: OnFinalMessage deletes
 
@@ -96,21 +96,21 @@ void VoucherBrowser::Reload()
     }
     grid_.SetRedraw(true);
     if (select) grid_.SetActiveCell(1, select);
-    SetWindowTextW(hwnd(), (std::wstring(kTitle) + L" (" + std::to_wstring(rows_.size()) + L")").c_str());
+    SetTitle((std::wstring(kTitle) + L" (" + std::to_wstring(rows_.size()) + L")").c_str());
 }
 
 void VoucherBrowser::Open(int row)
 {
-    if (row < 1 || row > static_cast<int>(rows_.size()) || !frame()) return;
+    if (row < 1 || row > static_cast<int>(rows_.size()) || !host()) return;
     const VoucherHeader v = rows_[row - 1];
-    HWND owner = frame()->hwnd();
+    HWND owner = host()->hostWindow();
     if (v.mode == voucher_mode::kOpen) {
         RunVoucherEntry(owner, v.number);
     } else if (v.mode == voucher_mode::kAdjustment) {
         RunPriorPeriodEntry(owner, v.number);
     } else {   // posted: read only
         const long n = v.number;
-        RunReport(*frame(), {}, [n](const ReportContext& ctx) { return VoucherSlip(cb, ctx, n); });
+        RunReport(*host(), {}, [n](const ReportContext& ctx) { return VoucherSlip(cb, ctx, n); });
         return;   // the preview is active now; nothing changed
     }
     if (IsWindow(hwnd())) {
@@ -122,7 +122,7 @@ void VoucherBrowser::Open(int row)
 bool VoucherBrowser::OnSize(UINT type, int cx, int cy)
 {
     if (type != SIZE_MINIMIZED && grid_.hwnd()) MoveWindow(grid_.hwnd(), 0, 0, cx, cy, TRUE);
-    return false;   // DefMDIChildProc too (maximize / minimize)
+    return false;
 }
 
 bool VoucherBrowser::OnCommand(WORD id, WORD code, HWND)
@@ -141,7 +141,7 @@ bool VoucherBrowser::OnCommand(WORD id, WORD code, HWND)
 
 bool VoucherBrowser::OnMessage(UINT msg, WPARAM wp, LPARAM lp, LRESULT& result)
 {
-    MdiChild::OnMessage(msg, wp, lp, result);   // reports WM_MDIACTIVATE to the frame
+    HostedPage::OnMessage(msg, wp, lp, result);   // reports WM_MDIACTIVATE to an MDI host
     switch (msg) {
     case WM_SETFOCUS:
         if (grid_.list()) SetFocus(grid_.list());
@@ -156,19 +156,18 @@ bool VoucherBrowser::OnMessage(UINT msg, WPARAM wp, LPARAM lp, LRESULT& result)
 
 } // namespace
 
-void OpenVoucherBrowser(fx::MdiFrame& frame)
+void OpenVoucherBrowser(fx::PageHost& frame)
 {
     if (gOpen && IsWindow(gOpen)) {
-        SendMessageW(frame.mdiClient(), WM_MDIACTIVATE, reinterpret_cast<WPARAM>(gOpen), 0);
-        if (IsIconic(gOpen)) SendMessageW(frame.mdiClient(), WM_MDIRESTORE, reinterpret_cast<WPARAM>(gOpen), 0);
+        frame.ActivatePage(gOpen);
         if (auto* w = dynamic_cast<VoucherBrowser*>(fx::Window::FromHandle(gOpen))) w->Reload();
         return;
     }
     auto* w = new VoucherBrowser;
-    HWND h = w->CreateChild(frame, kClass, kTitle);
+    HWND h = w->CreatePage(frame, kClass, kTitle);
     if (!h) {
         delete w;
-        MessageBoxW(frame.hwnd(), L"The voucher list could not be opened.", szApp, MB_OK | MB_ICONSTOP);
+        MessageBoxW(frame.hostWindow(), L"The voucher list could not be opened.", szApp, MB_OK | MB_ICONSTOP);
         return;
     }
     w->selfOwned = true;

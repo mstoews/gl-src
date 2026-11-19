@@ -3,6 +3,8 @@
 //
 #include "report/win32/Preview.h"
 
+#include "MdiFrame.h"   // win32fx: the modal preview window
+
 #include "report/Csv.h"
 #include "report/Layout.h"
 #include "report/win32/Gdi.h"
@@ -70,7 +72,7 @@ private:
     bool updating_ = false;
 };
 
-class PreviewWindow : public win32fx::MdiChild {
+class PreviewWindow : public win32fx::HostedPage {
 public:
     PreviewWindow(Report report, Rebuild rebuild) : report_(std::move(report)), rebuild_(std::move(rebuild)) {}
 
@@ -378,7 +380,7 @@ bool PreviewWindow::OnSize(UINT, int cx, int cy)
     if (rebuild_) place(buttons_[6], 84, 10);   // Options...
     place(buttons_[7], 64, 0);       // Close
     MoveWindow(view_.hwnd(), 0, stripHeight_, cx, (std::max)(0, cy - stripHeight_), TRUE);
-    return false;   // DefMDIChildProc keeps the MDI maximize state
+    return false;   // under an MDI host, DefMDIChildProc keeps the maximize state
 }
 
 bool PreviewWindow::OnCommand(WORD id, WORD code, HWND ctl)
@@ -394,7 +396,7 @@ bool PreviewWindow::OnCommand(WORD id, WORD code, HWND ctl)
     case IDB_ZOOM:    CycleZoom(); break;
     case IDB_OPTIONS: Options(); break;
     case IDB_CLOSE:
-        SendMessageW(GetParent(hwnd()), WM_MDIDESTROY, reinterpret_cast<WPARAM>(hwnd()), 0);
+        ClosePage();
         return true;
     default:
         return false;
@@ -415,7 +417,7 @@ bool PreviewWindow::OnDestroy()
 
 bool PreviewWindow::OnMessage(UINT msg, WPARAM wp, LPARAM lp, LRESULT& result)
 {
-    MdiChild::OnMessage(msg, wp, lp, result);   // reports WM_MDIACTIVATE to the frame
+    HostedPage::OnMessage(msg, wp, lp, result);   // reports WM_MDIACTIVATE to an MDI host
     switch (msg) {
     case WM_SETFOCUS:
         if (view_.hwnd()) SetFocus(view_.hwnd());
@@ -470,13 +472,13 @@ void PreviewWindow::UpdateStrip()
 
 void PreviewWindow::Print()
 {
-    HWND owner = frame() ? frame()->hwnd() : hwnd();
+    HWND owner = host() ? host()->hostWindow() : hwnd();
     PrintReport(owner, report_, pageCount());
 }
 
 void PreviewWindow::Export()
 {
-    HWND owner = frame() ? frame()->hwnd() : hwnd();
+    HWND owner = host() ? host()->hostWindow() : hwnd();
     // A file name from the title, without the characters Windows refuses.
     std::wstring name = title();
     for (wchar_t& ch : name)
@@ -510,10 +512,10 @@ void PreviewWindow::Export()
 void PreviewWindow::Options()
 {
     if (!rebuild_) return;
-    std::optional<Report> rebuilt = rebuild_(frame() ? frame()->hwnd() : hwnd());
+    std::optional<Report> rebuilt = rebuild_(host() ? host()->hostWindow() : hwnd());
     if (!rebuilt || !hwnd()) return;
     report_ = std::move(*rebuilt);
-    SetWindowTextW(hwnd(), title().c_str());
+    SetTitle(title().c_str());
     page_ = 0;
     Relayout();
     view_.Reset();
@@ -533,10 +535,10 @@ PreviewWindow* previewFrom(HWND hwnd) noexcept
 
 } // namespace
 
-HWND OpenPreview(win32fx::MdiFrame& frame, Report report, Rebuild rebuild)
+HWND OpenPreview(win32fx::PageHost& host, Report report, Rebuild rebuild)
 {
     auto* w = new PreviewWindow(std::move(report), std::move(rebuild));
-    HWND h = w->CreateChild(frame, kPreviewClass, w->title().c_str());
+    HWND h = w->CreatePage(host, kPreviewClass, w->title().c_str());
     if (!h) {
         delete w;
         return nullptr;
@@ -626,9 +628,9 @@ bool ShowPreviewWindow(HWND owner, Report report)
 
 bool IsPreview(HWND hwnd) noexcept { return previewFrom(hwnd) != nullptr; }
 
-bool PrintActivePreview(win32fx::MdiFrame& frame)
+bool PrintActivePreview(win32fx::PageHost& host)
 {
-    PreviewWindow* p = previewFrom(frame.activeChild());
+    PreviewWindow* p = previewFrom(host.activePage());
     if (!p) return false;
     p->Print();
     return true;

@@ -58,6 +58,8 @@
     <ClInclude Include="port\Assets.h" />
     <ClInclude Include="port\Backup.h" />
     <ClInclude Include="port\ChartOfAccounts.h" />
+    <ClInclude Include="port\Commands.h" />
+    <ClInclude Include="port\CommandsMenu.h" />
     <ClInclude Include="port\Company.h" />
     <ClInclude Include="port\CompanyFiles.h" />
     <ClInclude Include="port\CompanyProfile.h" />
@@ -126,6 +128,8 @@
     <ClCompile Include="port\Assets.cpp" />
     <ClCompile Include="port\Backup.cpp" />
     <ClCompile Include="port\ChartOfAccounts.cpp" />
+    <ClCompile Include="port\Commands.cpp" />
+    <ClCompile Include="port\CommandsMenu.cpp" />
     <ClCompile Include="port\Company.cpp" />
     <ClCompile Include="port\CompanyFiles.cpp" />
     <ClCompile Include="port\CompanyProfile.cpp" />

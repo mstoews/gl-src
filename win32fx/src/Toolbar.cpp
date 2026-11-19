@@ -141,6 +141,11 @@ HWND CommandBar::Rebuild()
     return hwnd_;
 }
 
+void CommandBar::EnableCommand(WORD command, bool enabled)
+{
+    if (hwnd_) SendMessageW(hwnd_, TB_ENABLEBUTTON, command, MAKELPARAM(enabled ? TRUE : FALSE, 0));
+}
+
 int CommandBar::Height() const
 {
     if (!hwnd_) return 0;

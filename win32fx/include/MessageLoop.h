@@ -20,6 +20,12 @@ int RunMessageLoop(HWND frame = nullptr, HWND mdiClient = nullptr, HACCEL accel 
 bool PreTranslate(MSG& msg, HWND frame = nullptr, HWND mdiClient = nullptr, HACCEL accel = nullptr);
 
 // Used by Dialog for modeless dialogs.
+// A filter that sees each message first and returns true to take it (the
+// workspace's tab keys, spec #8 4). One at a time; null removes it.
+using KeyFilter = bool (*)(MSG& msg);
+void SetKeyFilter(KeyFilter filter);
+KeyFilter CurrentKeyFilter();
+
 void AddModeless(HWND dialog);
 void RemoveModeless(HWND dialog);
 

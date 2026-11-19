@@ -5,8 +5,8 @@
 //                       access.psw; loads the user's menu-access string.
 //   UserAdministration  TGLAdministration, dialog 1159 (Maintenance > User
 //                       Access): browse/add/modify/delete access.psw users.
-//   ApplyMenuAccess     TManilaGL::WMInitMenuPopup: grays the frame-menu
-//                       items the access string turns off.
+//   (ApplyMenuAccess, which greyed the menu items the access string turned
+//   off, became cmd::Rights in spec #8 S8-M0: Commands.h.)
 //   LoginRequired       GL.INI [ACCESS] PSW=T (TGlWindow::SetupWindow).
 //
 // TAccessMenus (dialog 1160, the menu-access editor behind 1159's Menu
@@ -31,7 +31,3 @@ INT_PTR RunLogin(HWND frame);
 // Maintenance > User Access.
 void RunUserAdministration(HWND frame);
 
-// Call on WM_INITMENUPOPUP. Once after each login (bMenuSetup FALSE), walks
-// accessm in "menu" tag order alongside szMsg: '1' grays that row's menu
-// command on `menu`, anything else enables it.
-void ApplyMenuAccess(HMENU menu);
