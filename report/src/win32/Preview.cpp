@@ -74,9 +74,13 @@ private:
 
 class PreviewWindow : public win32fx::HostedPage {
 public:
-    PreviewWindow(Report report, Rebuild rebuild) : report_(std::move(report)), rebuild_(std::move(rebuild)) {}
+    PreviewWindow(Report report, Rebuild rebuild, std::unique_ptr<OptionsPanel> panel)
+        : report_(std::move(report)), rebuild_(std::move(rebuild)), panel_(std::move(panel))
+    {
+    }
 
     bool selfOwned = false;   // set once the window exists: OnFinalMessage deletes
+    bool embedded = false;    // a child of another window (CreatePreviewChild): no Close
 
     const PageSetup& setup() const noexcept { return setup_; }
     const Page& page() const { return pages_[static_cast<size_t>(page_)]; }
@@ -89,6 +93,10 @@ public:
     void Print();
     void Export();   // the rows as CSV (spec #7 Q4)
     void CycleZoom();
+    void Options();
+    void Replace(Report rebuilt);   // keeps the page number where it can
+    HWND panelWindow() const noexcept { return panelHwnd_; }
+    bool canRebuild() const noexcept { return rebuild_ || panel_; }
     std::wstring title() const { return Widen(report_.title.empty() ? std::string("Report") : report_.title); }
 
 protected:
@@ -105,11 +113,14 @@ protected:
 private:
     void Relayout();
     void UpdateStrip();
-    void Options();
-    void SetUiFont();   // uiFont_ for the window's DPI, on the strip's controls
+    void SetUiFont();
+    void TakeReport(Report rebuilt);   // uiFont_ for the window's DPI, on the strip's controls
 
     Report report_;
     Rebuild rebuild_;
+    std::unique_ptr<OptionsPanel> panel_;
+    HWND panelHwnd_ = nullptr;
+    int panelHeight_ = 0;   // pixels, as created (and again after a DPI change)
     std::vector<Page> pages_;
     PageSetup setup_;
     FontSet fonts_;
@@ -327,10 +338,11 @@ bool PreviewWindow::OnCreate(LPCREATESTRUCTW cs)
     SetClassLongPtrW(hwnd(), GCLP_HBRBACKGROUND, reinterpret_cast<LONG_PTR>(GetSysColorBrush(COLOR_BTNFACE)));
     SetUiFont();
 
-    const wchar_t* text[kButtons] = {L"&Print...", L"|<", L"<", L">", L">|", zoomText(zoom_), L"&Options...", L"&Close", L"E&xport..."};
+    const wchar_t* text[kButtons] = {L"&Print...", L"|<", L"<", L">", L">|", zoomText(zoom_),
+                                     panel_ ? L"&Refresh" : L"&Options...", L"&Close", L"E&xport..."};
     for (int i = 0; i < kButtons; ++i) {
         DWORD style = WS_CHILD | WS_TABSTOP | BS_PUSHBUTTON;
-        if (i != IDB_OPTIONS - IDB_PRINT || rebuild_) style |= WS_VISIBLE;
+        if ((i != IDB_OPTIONS - IDB_PRINT || canRebuild()) && (i != IDB_CLOSE - IDB_PRINT || !embedded)) style |= WS_VISIBLE;
         buttons_[i] = CreateWindowExW(0, L"BUTTON", text[i], style, 0, 0, 0, 0, hwnd(),
                                       reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDB_PRINT + i)), inst, nullptr);
         SendMessageW(buttons_[i], WM_SETFONT, reinterpret_cast<WPARAM>(uiFont_), FALSE);
@@ -340,6 +352,14 @@ bool PreviewWindow::OnCreate(LPCREATESTRUCTW cs)
     SendMessageW(label_, WM_SETFONT, reinterpret_cast<WPARAM>(uiFont_), FALSE);
     // An exception from WM_CREATE fails CreateMDIWindowW (Window.h).
     if (!view_.CreateView(hwnd(), inst)) throw std::runtime_error("The preview's page view could not be created.");
+    if (panel_) {
+        panelHwnd_ = panel_->CreatePanel(hwnd());
+        if (!panelHwnd_) throw std::runtime_error("The report's options could not be shown.");
+        RECT r{};
+        GetWindowRect(panelHwnd_, &r);
+        panelHeight_ = r.bottom - r.top;
+        ShowWindow(panelHwnd_, SW_SHOW);
+    }
     AddPrinterListener(hwnd());
     Relayout();
     return false;   // DefMDIChildProc too
@@ -377,14 +397,23 @@ bool PreviewWindow::OnSize(UINT, int cx, int cy)
     place(buttons_[3], 32, 2);       // >
     place(buttons_[4], 32, 10);      // >|
     place(buttons_[5], 80, 10);      // zoom
-    if (rebuild_) place(buttons_[6], 84, 10);   // Options...
-    place(buttons_[7], 64, 0);       // Close
-    MoveWindow(view_.hwnd(), 0, stripHeight_, cx, (std::max)(0, cy - stripHeight_), TRUE);
+    if (canRebuild()) place(buttons_[6], 84, 10);   // Options... / Refresh
+    if (!embedded) place(buttons_[7], 64, 0);       // Close
+    int top = stripHeight_;
+    if (panelHwnd_) {
+        MoveWindow(panelHwnd_, 0, top, cx, panelHeight_, TRUE);
+        top += panelHeight_;
+    }
+    MoveWindow(view_.hwnd(), 0, top, cx, (std::max)(0, cy - top), TRUE);
     return false;   // under an MDI host, DefMDIChildProc keeps the maximize state
 }
 
 bool PreviewWindow::OnCommand(WORD id, WORD code, HWND ctl)
 {
+    if (id == IDOK && panel_ && !ctl) {   // Enter in the panel
+        Options();
+        return true;
+    }
     if (!ctl || code != BN_CLICKED) return false;
     switch (id) {
     case IDB_PRINT:   Print(); break;
@@ -394,7 +423,10 @@ bool PreviewWindow::OnCommand(WORD id, WORD code, HWND ctl)
     case IDB_NEXT:    Go(page_ + 1); break;
     case IDB_LAST:    Go(pageCount() - 1); break;
     case IDB_ZOOM:    CycleZoom(); break;
-    case IDB_OPTIONS: Options(); break;
+    case IDB_OPTIONS:
+        Options();
+        if (panelHwnd_ && hwnd() && IsChild(panelHwnd_, GetFocus())) return true;   // a refused value keeps the focus
+        break;
     case IDB_CLOSE:
         ClosePage();
         return true;
@@ -428,6 +460,11 @@ bool PreviewWindow::OnMessage(UINT msg, WPARAM wp, LPARAM lp, LRESULT& result)
         return true;
     case WM_DPICHANGED_AFTERPARENT: {   // moved to a monitor with another scaling (UI refresh spec 5.2)
         SetUiFont();
+        if (panelHwnd_) {
+            RECT r{};
+            GetWindowRect(panelHwnd_, &r);
+            panelHeight_ = r.bottom - r.top;
+        }
         RECT rc{};
         GetClientRect(hwnd(), &rc);
         OnSize(SIZE_RESTORED, rc.right, rc.bottom);   // the strip at the new DPI
@@ -511,10 +548,27 @@ void PreviewWindow::Export()
 
 void PreviewWindow::Options()
 {
-    if (!rebuild_) return;
-    std::optional<Report> rebuilt = rebuild_(host() ? host()->hostWindow() : hwnd());
+    HWND owner = host() ? host()->hostWindow() : hwnd();
+    std::optional<Report> rebuilt;
+    if (panel_) rebuilt = panel_->Rebuild(owner);
+    else if (rebuild_) rebuilt = rebuild_(owner);
     if (!rebuilt || !hwnd()) return;
-    report_ = std::move(*rebuilt);
+    TakeReport(std::move(*rebuilt));
+}
+
+void PreviewWindow::Replace(Report rebuilt)
+{
+    const int was = page_;
+    report_ = std::move(rebuilt);
+    Relayout();
+    page_ = std::clamp(was, 0, pageCount() - 1);
+    UpdateStrip();
+    view_.Update();
+}
+
+void PreviewWindow::TakeReport(Report rebuilt)
+{
+    report_ = std::move(rebuilt);
     SetTitle(title().c_str());
     page_ = 0;
     Relayout();
@@ -537,7 +591,20 @@ PreviewWindow* previewFrom(HWND hwnd) noexcept
 
 HWND OpenPreview(win32fx::PageHost& host, Report report, Rebuild rebuild)
 {
-    auto* w = new PreviewWindow(std::move(report), std::move(rebuild));
+    auto* w = new PreviewWindow(std::move(report), std::move(rebuild), nullptr);
+    HWND h = w->CreatePage(host, kPreviewClass, w->title().c_str());
+    if (!h) {
+        delete w;
+        return nullptr;
+    }
+    w->selfOwned = true;
+    SetFocus(h);
+    return h;
+}
+
+HWND OpenPreview(win32fx::PageHost& host, Report report, std::unique_ptr<OptionsPanel> panel)
+{
+    auto* w = new PreviewWindow(std::move(report), {}, std::move(panel));
     HWND h = w->CreatePage(host, kPreviewClass, w->title().c_str());
     if (!h) {
         delete w;
@@ -646,6 +713,49 @@ int PreviewPageCount(HWND hwnd) noexcept
 {
     const PreviewWindow* p = previewFrom(hwnd);
     return p ? p->pageCount() : -1;
+}
+
+HWND CreatePreviewChild(HWND parent, int id, Report report)
+{
+    HINSTANCE inst = GetModuleHandleW(nullptr);
+    if (!win32fx::EnsureWindowClass(inst, kPreviewClass, nullptr, GetSysColorBrush(COLOR_BTNFACE))) return nullptr;
+    auto* w = new PreviewWindow(std::move(report), {}, nullptr);
+    w->embedded = true;
+    HWND h = nullptr;
+    try {
+        h = w->Create(WS_EX_CONTROLPARENT, kPreviewClass, w->title().c_str(), WS_CHILD | WS_VISIBLE | WS_CLIPCHILDREN | WS_TABSTOP,
+                      0, 0, 0, 0, parent, reinterpret_cast<HMENU>(static_cast<INT_PTR>(id)), inst);
+    } catch (...) {
+        h = nullptr;
+    }
+    if (!h) {
+        delete w;
+        return nullptr;
+    }
+    w->selfOwned = true;
+    return h;
+}
+
+bool SetPreviewReport(HWND hwnd, Report report)
+{
+    PreviewWindow* p = previewFrom(hwnd);
+    if (!p) return false;
+    p->Replace(std::move(report));
+    return true;
+}
+
+bool RefreshPreview(HWND hwnd)
+{
+    PreviewWindow* p = previewFrom(hwnd);
+    if (!p || !p->canRebuild()) return false;
+    p->Options();
+    return true;
+}
+
+HWND PreviewPanel(HWND hwnd) noexcept
+{
+    const PreviewWindow* p = previewFrom(hwnd);
+    return p ? p->panelWindow() : nullptr;
 }
 
 bool CyclePreviewZoom(HWND hwnd)

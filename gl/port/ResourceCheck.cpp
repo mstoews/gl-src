@@ -142,14 +142,17 @@ const DialogCase kDialogs[] = {
     {1155, L"Receipt (TARClear)", false, Pics::Main, {1094}},
     {1062, L"Purge Received Receivables (TARPurgeBatch)", true, Pics::Main},   // Spec #6 S6-M5
     // The port's own (gl/res/port.rc, spec #3 3).
-    {IDD_SAMPLE_OPTIONS, L"Sample Report options (port.rc, S3-M1)", false},
-    {IDD_TB_OPTIONS, L"Trial balance options (port.rc, S3-M2)", false},
-    {IDD_STMT_OPTIONS, L"Financial statement options (port.rc, S3-M3)", false},
+    {IDD_PNL_SAMPLE, L"Sample Report options panel (port.rc, spec #8 G1)", false},
+    {IDD_PNL_TB, L"Trial balance options panel (port.rc, spec #8 G1)", false},
+    {IDD_PNL_STMT, L"Financial statement options panel (port.rc, spec #8 G1)", false},
     {IDD_STMT_LAYOUT, L"Statement Layout (port.rc, S3-M4)", false},   // its grid is IDC_SL_GRID, not ID_DISTLIST
     {IDD_AP_CONFIRM, L"Confirm Printed Cheques (port.rc, S5-M6)", false},   // its grid is IDC_APC_GRID
     {IDD_RW_DESIGN, L"Report Designer (port.rc, spec #7 S7-M2)", false},
     {IDD_RW_CALC, L"Calculated Column (port.rc, spec #7 S7-M3)", false},
     {IDD_RW_PROMPT, L"Report questions (port.rc, spec #7 S7-M3)", false},
+    {IDD_PNL_RW_PROMPT, L"Report questions panel (port.rc, spec #8 G1)", false},
+    {IDD_PNL_RW_DESIGN, L"Report Designer form (port.rc, spec #8 G1)", false},
+    {IDD_PG_RW_DESIGN, L"Report Designer page (port.rc, spec #8 G1)", false},
 };
 
 void applyPictures(HWND dlg, const DialogCase& d)

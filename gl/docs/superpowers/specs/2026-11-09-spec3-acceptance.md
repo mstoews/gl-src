@@ -262,10 +262,12 @@ The figures and checks above stay as they are. Spec #8 moved some screens onto p
 
 | Criterion and step | Where it's done now | What differs |
 |---|---|---|
+| The criteria (opening line); 1, first and fourth steps; 2 to 7 (each report's options) | The report's preview tab: its options are a row above the page (spec #8 G1). | No options dialog comes first: the report opens at once with the session's last options (the current period the first time). Change them in the row and press **Refresh** (or Enter in the row) in place of **Options...** and **OK**. The figures, and the message "The To period comes before the From period.", are the same. |
 | 8, last step (clerk) | Compare Statement Layout with the Chart of Accounts page's command (menu and navigation pane). | Chart of Accounts opens a page, not a dialog. Statement Layout is still a dialog. |
 | 9, step 2 (Year End Consolidation) | The Year End Consolidation task page: its action button, then **Yes** in the task dialog. | It runs in the background with progress. The result line, not a message box, gives the amount taken to retained earnings, the **27** lines archived and the **1** voucher closed; 340000's new balance (−18,290.00) is checked by the next steps. |
 | 10, Voucher Entry's Print | General Ledger Voucher (classic) only. | The GL voucher page has no Print; a voucher's slip also prints from **Voucher Slips**. |
-| 11, step 3 (Custom Report, and right-click > Custom Report) | The report gallery page. | Reports are grouped by menu, then user reports, with search, favourites and recent, instead of the 1022 list. A report still opens its options dialog, then its preview, now in a tab. **File > Print** with no preview active still opens dialog 1022 (step 2 is unchanged). |
+| 11, step 2, last check (double-click **1 Trial Balance**) | Dialog 1022. | Its preview opens with the period row above it, not its options dialog. |
+| 11, step 3 (Custom Report, and right-click > Custom Report) | The report gallery page. | Reports are grouped by menu, then user reports, with search, favourites and recent, instead of the 1022 list. A report opens its preview in a tab, with its options above it. **File > Print** with no preview active still opens dialog 1022 (step 2 is unchanged). |
 
 ## Gaps and triage
 

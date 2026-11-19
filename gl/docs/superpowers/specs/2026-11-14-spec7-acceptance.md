@@ -191,15 +191,16 @@ Log in as `ADMIN`. **Reporting > Custom Report** lists the built-in reports, the
 
 The figures and checks above stay as they are. Spec #8 moved some screens into pages in the main window; this table says where each step whose screen moved is done in the redesigned program. Until Spec #8's acceptance, the old dialog of each moved screen is still in the navigation pane as a "(classic)" entry (here **Reporting > Custom Report (classic)**), so each step can be done either way.
 
-The Report Designer, the calculation dialog, the questions, the preview (with its **Options...** and **Export...**) and the login did not move.
+The calculation dialog, the preview's **Export...** and the login did not move. From the gallery the Report Designer is a page (spec #8 G1): the same form on the left, and on the right a preview built again a moment after each change, without saving. A report's questions are a row above its preview, not a dialog. **Custom Report (classic)** still opens the designer and the questions as dialogs.
 
 | Criterion and step | Where it's done now | What differs |
 |---|---|---|
 | The criteria (opening line) | **Reporting > Custom Report** opens the report gallery page. | Favourites and Recent come first (when not searching), then the built-in reports grouped by their menu, then "User reports" with each one's description and maker. A search box narrows the list. |
-| 1, first step (**Add...**) | Gallery, **New report**. | The same designer opens. |
+| 1, first step (**Add...**) | Gallery, **New report**. | The designer opens as a page, "Design: new report". |
+| 1, **Preview**, **Save** and **Close** | The designer page. | The preview on the right follows each change; **Preview** builds it at once (a report that asks questions asks them then). After **Save** the tab reads "Design: Sales by product (made)" and its "•" goes, in place of the caption. **Close** (or the tab's ×) closes the page, asking to save changes; Esc doesn't close it. |
 | 1, last step (**Close**: the list shows it) | Gallery, under "User reports". | The maker (ADMIN) is shown in the report's row. |
 | 2, first step (**Modify...**) | Gallery, select the report, **Modify**. | None. |
-| 2, third and fifth steps (**Print**) | Gallery, **Open** (or double-click the report). | None: the questions, then the preview in a tab. |
+| 2, third and fifth steps (**Print**, the questions, **Options...**) | Gallery, **Open** (or double-click the report). | The questions are a row above the preview. The first time, the preview is empty ("Answer the report's questions above, then Refresh."): choose 7 to 7 and press **Refresh** in place of **OK**. **Refresh** is also **Options...**: choose 8 to 8, **Refresh**. Opened again, the report builds at once from the last answers (8 to 8); there is no **Cancel**: close the tab. |
 | 3, first step (**Add...**) | Gallery, **New report**. | None. |
 | 3, second step (**Print**) | Gallery, **Open**. | None. |
 | 4, first step (**Add...**) | Gallery, **New report**. | None. |

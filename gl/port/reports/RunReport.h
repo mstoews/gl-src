@@ -11,23 +11,37 @@
 //   3. the builder, whose exceptions are shown as the other screens show them;
 //   4. a preview (report/win32/Preview.h), whose Options... repeats 1-3.
 //
+// Spec #8 G1: the reports with options (the sample, F1 to F5, a user report
+// that asks) run through RunReportWithPanel instead: steps 2-4 at once with
+// the session's last options, and the options as a panel above the preview,
+// whose Refresh reads them and repeats 2-3.
+//
 // A builder that leaves the report's company or "Printed on" line empty gets
 // the context's.
 //
 #pragma once
 
 #include "ReportContext.h"
+#include "ReportOptions.h"   // ReportPanel
 
 #include "report/Report.h"
 
 #include "win32fx.h"
 
 #include <functional>
+#include <memory>
+#include <optional>
 
 using ReportOptionsFn = std::function<bool(HWND owner)>;   // false: cancelled; null: no options
 using ReportBuilder = std::function<rpt::Report(const ReportContext&)>;
 
 void RunReport(fx::PageHost& frame, ReportOptionsFn options, ReportBuilder build);
+
+// G1: builds the report (or shows `first` when given: a user report not yet
+// answered) and opens its preview with `panel` above it. The panel's Read and
+// then `build` make each Refresh. Returns the preview, or null.
+HWND RunReportWithPanel(fx::PageHost& frame, std::unique_ptr<ReportPanel> panel, ReportBuilder build,
+                        std::optional<rpt::Report> first = std::nullopt);
 
 // The context for the open company database, printed today.
 ReportContext CurrentReportContext();

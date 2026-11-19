@@ -218,7 +218,7 @@ Known before the walkthrough:
 
 | # | Gap | Triage |
 |---|---|---|
-| G1 | The report options are dialogs before the preview (and again from its Refresh), not panels above it; the Report Designer is a dialog, not a page (plan M5 tasks 3 and 5). | Deferred: a later spec. |
+| G1 | The report options are dialogs before the preview (and again from its Refresh), not panels above it; the Report Designer is a dialog, not a page (plan M5 tasks 3 and 5). | Fixed (S8-M7): the options and a user report's questions are a row above the preview, with **Refresh**; the gallery opens the designer as a page with a live preview. The Spec #3 and #7 redesign tables are updated. |
 | G2 | The report gallery has no Export... or Import... of report definitions (`.gldef`); Spec #7's #7, #8 and #9 export and import through "Custom Report (classic)". | Fixed (S8-M7): **Export...** and **Import...** on the gallery, the list's own code; Spec #7's redesign table updated. |
 | G3 | Budget Data, Company Profile's accounts and banks, Print Cheques, Confirm Printed Cheques, Restore and Bank Reconciliation are still dialogs. | Deferred: a later spec. |
 | G4 | Removing the classic dialogs, `MainDialog`, the old controls, `MdiFrame` and the MANILA menu resource (plan M6 task 4) waits for this sign-off. | After sign-off. |

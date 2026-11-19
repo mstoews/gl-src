@@ -13,7 +13,17 @@
 // window over the dialog, without saving; Save checks it (rw::CheckDefinition)
 // and saves it to gl_rptdef; Close asks to save changes.
 //
+// Spec #8 G1: the gallery opens the designer as a page instead
+// (OpenReportDesigner): the same form on the left, and on the right a preview
+// that is built again a moment after each change (debounced), without saving.
+// A report that asks questions is previewed once they are answered: its
+// Preview button asks them. The page's tab shows "•" while there are unsaved
+// changes; Save (or Ctrl+S) saves, and closing the tab asks to save. The
+// modal designer stays for Custom Report (classic).
+//
 #pragma once
+
+#include "win32fx.h"
 
 #include <Windows.h>
 
@@ -21,6 +31,11 @@
 // with `copy`, on a copy of it, saved as a new report. Returns the number
 // saved last, or 0 if nothing was saved.
 long RunReportDesigner(HWND owner, long number, bool copy = false, bool closeAtOnce = false);
+
+// The designer page in `host` on definition `number` (0: a new report), or a
+// copy of it with `copy`. A definition already open in a page is shown
+// again. Returns the page, or null.
+HWND OpenReportDesigner(fx::PageHost& host, long number, bool copy = false);
 
 // gl.exe /stress: opens and closes the designer `times` times on a new and an
 // existing definition; returns the change in GDI + USER objects (-1 if it

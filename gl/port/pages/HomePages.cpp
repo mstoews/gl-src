@@ -267,13 +267,13 @@ protected:
                 ShowInfo(fx::InfoKind::Success, wide(copy.name) + (model_.IsFavourite(copy) ? L" is a favourite: it's on the home page." : L" is no longer a favourite."));
             }
             return true;
-        case IDC_RG_NEW:
-            if (RunReportDesigner(host()->hostWindow(), 0)) Load();
+        case IDC_RG_NEW:   // G1: the designer is a page; saving reloads this list (kDataChanged)
+            OpenReportDesigner(*host(), 0);
             return true;
         case IDC_RG_MODIFY:
         case IDC_RG_COPY:
             if (e && e->definition) {
-                if (RunReportDesigner(host()->hostWindow(), e->definition, id == IDC_RG_COPY)) Load();
+                OpenReportDesigner(*host(), e->definition, id == IDC_RG_COPY);
             } else {
                 ShowInfo(fx::InfoKind::Information, L"Choose a user report: the built-in ones can't be changed.");
             }
@@ -302,6 +302,13 @@ protected:
             return true;
         default: return false;
         }
+    }
+
+    bool OnMessage(UINT msg, WPARAM wp, LPARAM lp, LRESULT& result) override
+    {
+        // G1: a report saved (or deleted) on a designer page: listed again.
+        if (msg == kDataChanged && (wp & data_group::kReports) && reinterpret_cast<HWND>(lp) != hwnd() && list_) Load();
+        return fx::Page::OnMessage(msg, wp, lp, result);
     }
 
     bool OnFormNotify(NMHDR* nm, LRESULT& result) override
