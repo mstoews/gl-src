@@ -476,7 +476,9 @@ public:
     std::vector<TaskRow> Load(cb4sqlite::Code4&) override
     {
         const int y = std::atoi(today_.substr(0, 4).c_str()), mo = std::atoi(today_.substr(4, 2).c_str()), d = std::atoi(today_.substr(6, 2).c_str());
-        copy_ = BackupFileName(std::filesystem::path(std::u8string(database_.begin(), database_.end())), y, mo, d).u8string();
+        // Beside the company file, as Backup's file dialog starts (BackupFileName is the name alone).
+        const std::filesystem::path db(std::u8string(database_.begin(), database_.end()));
+        copy_ = (db.parent_path() / BackupFileName(db, y, mo, d)).u8string();
         return {{1, {database_, std::string(copy_.begin(), copy_.end())}, true, false, ""}};
     }
     TaskStep RunAll(cb4sqlite::Code4& code, const std::vector<TaskRow>&) override

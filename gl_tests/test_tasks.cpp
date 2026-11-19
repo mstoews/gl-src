@@ -290,6 +290,7 @@ TEST_CASE("Backup task: a copy that opens and passes integrity_check (S8-M4)", "
     REQUIRE(r.ok);
     company.close();
     const std::string copy = rows[0].cells[1];
+    CHECK(std::filesystem::path(copy).parent_path() == dir);   // beside the company file, not in the current directory
     Code4 other;
     REQUIRE(other.open(copy.c_str()) == r4success);
     cb4sqlite::Query q(other, "PRAGMA integrity_check");
