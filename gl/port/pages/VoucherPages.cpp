@@ -198,8 +198,45 @@ protected:
     virtual void UpdateTotals() = 0;
     virtual int ControlOf(const std::string& field) const = 0;
 
+    ~EntryPage() override
+    {
+        if (totalFont_) DeleteObject(totalFont_);
+    }
+
+    // The figure the voucher turns on (Difference, Payable or Total) and its label, semibold
+    // (ui-ux-pro-max visual-hierarchy, weight-hierarchy): the form's font at a heavier weight.
+    void EmphasiseTotal()
+    {
+        HWND ref = Item(IDC_VP_LDEBIT);
+        HFONT base = ref ? reinterpret_cast<HFONT>(SendMessageW(ref, WM_GETFONT, 0, 0)) : nullptr;
+        LOGFONTW lf{};
+        if (!base || !GetObjectW(base, sizeof lf, &lf)) return;
+        lf.lfWeight = FW_SEMIBOLD;
+        HFONT font = CreateFontIndirectW(&lf);
+        if (!font) return;
+        for (int id : {IDC_VP_LDIFF, IDC_VP_DIFF})
+            if (HWND h = Item(id)) SendMessageW(h, WM_SETFONT, reinterpret_cast<WPARAM>(font), TRUE);
+        if (totalFont_) DeleteObject(totalFont_);
+        totalFont_ = font;
+    }
+
+    // At a new scaling the form's own fonts change after the page hears of it: the semibold
+    // copy is made again once they have (a posted message).
+    bool OnMessage(UINT msg, WPARAM wp, LPARAM lp, LRESULT& result) override
+    {
+        if (msg == kEmphasiseTotal) {
+            EmphasiseTotal();
+            result = 0;
+            return true;
+        }
+        const bool handled = fx::Page::OnMessage(msg, wp, lp, result);
+        if (msg == WM_DPICHANGED_AFTERPARENT) PostMessageW(hwnd(), kEmphasiseTotal, 0, 0);
+        return handled;
+    }
+
     void AttachGrid(m::EntryGridModel& g)
     {
+        EmphasiseTotal();
         grid_.Attach(Item(IDC_VP_GRID), &g);
         g.OnChanged = [this] {
             if (loading_) return;
@@ -311,6 +348,10 @@ protected:
 
     fx::EntryGrid grid_;
     bool loading_ = false;
+
+private:
+    static constexpr UINT kEmphasiseTotal = WM_APP + 80;   // the semibold total, made again after a DPI change
+    HFONT totalFont_ = nullptr;
 };
 
 // ---- General Ledger voucher -----------------------------------------------------------

@@ -228,13 +228,21 @@ void Page::Relayout()
 {
     if (!form_ || !hwnd()) return;
     const model::Size orig = layout_.original();
+    // A form a few pixels larger than the page fits it instead of scrolling: a scroll bar
+    // whose thumb fills the track says "there's more" when there isn't (design review).
+    // The anchors take up the difference, up to kSlack96 px on each axis.
+    constexpr int kSlack96 = 8;
+    const int slack = MulDiv(kSlack96, static_cast<int>(dpi_), 96);
     for (int pass = 0; pass < 2; ++pass) {   // a scroll bar appearing changes the client size
         RECT rc{};
         GetClientRect(hwnd(), &rc);
         const int infoH = info_.Height();
         if (info_.hwnd()) MoveWindow(info_.hwnd(), 0, 0, rc.right, infoH, TRUE);
         const int availW = rc.right, availH = std::max(0, static_cast<int>(rc.bottom) - infoH);
-        const model::Size form = model::Clamp({availW, availH}, orig);
+        model::Size least = orig;
+        if (orig.cx > availW && orig.cx - availW <= slack) least.cx = availW;
+        if (orig.cy > availH && orig.cy - availH <= slack) least.cy = availH;
+        const model::Size form = model::Clamp({availW, availH}, least);
         sx_ = std::clamp(sx_, 0, std::max(0, form.cx - availW));
         sy_ = std::clamp(sy_, 0, std::max(0, form.cy - availH));
         SCROLLINFO si{sizeof si, SIF_RANGE | SIF_PAGE | SIF_POS};

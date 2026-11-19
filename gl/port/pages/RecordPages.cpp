@@ -84,15 +84,20 @@ std::map<WORD, HWND> gOpen;   // command -> its open page
 
 void addColumns(HWND list, const std::vector<ColumnDesc>& cols, int dpi)
 {
+    // ui-ux-pro-max truncation-strategy (design review): no column narrower than its heading
+    // ("Acco..." and "D..." were), and the last column (the description or name) takes the
+    // list's remaining width rather than leaving an empty strip while its text is cut off.
+    const int pad = MulDiv(16, dpi, 96);
     int i = 0;
     for (const ColumnDesc& col : cols) {
         LVCOLUMNW c{};
         c.mask = LVCF_TEXT | LVCF_WIDTH | LVCF_FMT;
         c.fmt = col.right ? LVCFMT_RIGHT : LVCFMT_LEFT;
-        c.cx = MulDiv(col.width, dpi, 96);
+        c.cx = std::max(MulDiv(col.width, dpi, 96), ListView_GetStringWidth(list, col.heading) + pad);
         c.pszText = const_cast<wchar_t*>(col.heading);
         ListView_InsertColumn(list, i++, &c);
     }
+    if (i > 0) ListView_SetColumnWidth(list, i - 1, LVSCW_AUTOSIZE_USEHEADER);   // the last one fills the list
 }
 
 bool isEditable(const FieldDesc& f)

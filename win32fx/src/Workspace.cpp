@@ -140,7 +140,9 @@ HWND Workspace::CreateWorkspace(HINSTANCE inst, const wchar_t* className, const 
     windowMenu_ = (menu && windowMenuPos >= 0) ? GetSubMenu(menu, windowMenuPos) : nullptr;
     INITCOMMONCONTROLSEX icc{sizeof icc, ICC_TAB_CLASSES | ICC_TREEVIEW_CLASSES | ICC_BAR_CLASSES};
     InitCommonControlsEx(&icc);
-    if (!EnsureWindowClass(inst, className, icon, reinterpret_cast<HBRUSH>(COLOR_APPWORKSPACE + 1))) return nullptr;
+    // The window's ground (behind the toolbar's edge, and the page area before a page opens):
+    // the dialog face, as Windows 11 apps show it, not the MDI client's dark grey.
+    if (!EnsureWindowClass(inst, className, icon, reinterpret_cast<HBRUSH>(COLOR_BTNFACE + 1))) return nullptr;
     return Create(0, className, title, WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN, CW_USEDEFAULT, CW_USEDEFAULT,
                   CW_USEDEFAULT, CW_USEDEFAULT, nullptr, menu, inst);
 }
@@ -172,8 +174,11 @@ bool Workspace::OnCreate(LPCREATESTRUCTW)
     nav_ = CreateWindowExW(0, WC_TREEVIEWW, L"Navigation",
                            // The arrows show which rows open and whether they're open (not only the
                            // group icons' colour); they always show (no TVS_EX_FADEINOUTEXPANDOS).
+                           // TVS_NOHSCROLL: a long title never scrolls the tree sideways (Home and the
+                           // arrows off the left edge); it's cut at the edge, and its tooltip shows it whole.
                            WS_CHILD | WS_VISIBLE | WS_TABSTOP | TVS_HASBUTTONS | TVS_LINESATROOT |
-                               TVS_SHOWSELALWAYS | TVS_FULLROWSELECT | TVS_TRACKSELECT | TVS_SINGLEEXPAND,
+                               TVS_SHOWSELALWAYS | TVS_FULLROWSELECT | TVS_TRACKSELECT | TVS_SINGLEEXPAND |
+                               TVS_NOHSCROLL,
                            0, 0, 0, 0, hwnd(), reinterpret_cast<HMENU>(static_cast<INT_PTR>(kNavId)), inst_, nullptr);
     if (nav_) {
         SetWindowTheme(nav_, L"Explorer", nullptr);

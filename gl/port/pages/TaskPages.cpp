@@ -137,11 +137,21 @@ public:
 protected:
     bool OnInitPage() override
     {
+        // A task with no check boxes hides Check all / Check none: Refresh takes Check all's
+        // place, so no gap reads as missing buttons (design review). Before the anchors are
+        // recorded, so the layout keeps it there.
+        if (!model_->Checks()) {
+            RECT r{};
+            GetWindowRect(Item(IDC_TK_ALL), &r);
+            MapWindowPoints(nullptr, form(), reinterpret_cast<POINT*>(&r), 2);
+            SetWindowPos(Item(IDC_TK_REFRESH), nullptr, r.left, r.top, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+        }
         SetAnchors(kAnchors);
         list_ = Item(IDC_TK_LIST);
         fx::SetAccessibleName(list_, wide(model_->Title()) + L": what it acts on");
         SetWindowTheme(list_, L"Explorer", nullptr);
-        ListView_SetExtendedListViewStyle(list_, LVS_EX_FULLROWSELECT | LVS_EX_DOUBLEBUFFER |
+        // LVS_EX_LABELTIP: a cut-off cell (a long path, a long note) shows whole in a tooltip.
+        ListView_SetExtendedListViewStyle(list_, LVS_EX_FULLROWSELECT | LVS_EX_DOUBLEBUFFER | LVS_EX_LABELTIP |
                                                      (model_->Checks() ? LVS_EX_CHECKBOXES : 0));
         const int dpi = static_cast<int>(GetDpiForWindow(list_));
         int i = 0;
