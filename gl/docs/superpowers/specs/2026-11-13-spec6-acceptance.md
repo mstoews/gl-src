@@ -233,7 +233,7 @@ Steps are numbered within their criterion: "2, step 3" is the third check box un
 | 5, step 2 | Receipts page | There is no **Partial** box: record 1,000.00, then 500.00, each with "Discount the rest" unticked. There is no question about a discount; the box decides. |
 | 5, step 3 | Receipts page | Tick "Discount the rest (early payment)" instead of **Discount**. |
 | 5, step 4 | Receipts page | 700.00 is refused with the amount field marked ("That's more than is owed."). |
-| 6, steps 1 and 2 | Clear Receipts (classic) | The receipts page has no **Receipts** list and doesn't reverse receipts: reverse them in the classic dialog. |
+| 6, steps 1 and 2 | Receipts page | There is no **Receipts** list: pick the invoice, then **Reverse last receipt** and confirm in the task dialog ("Reverse receipt" / "Keep it"); the result reads "Receipt 5 reversed: 2,300.00 is owed on the invoice." For S-1004 tick "Show paid invoices" in place of **View All**. The reversal of a transferred receipt is dated by the page's **Date** field (today unless changed), not always today; a date in no open period is refused on that field. |
 | 6, step 4 | Update AR and AP task page, then Post Voucher > General Ledger task page | The result line names GL vouchers 106 and 107. On the Post page leave 106 and 107 checked. |
 | 7, step 1 | Purge Received Receivables task page | Type the date in "Received before:" on the page; the list shows the settled invoices that go. |
 | 7, step 2 | Purge Received Receivables task page | Press the action button, confirm in the task dialog; the result line reports what was purged. |

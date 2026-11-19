@@ -589,6 +589,7 @@ EntryResult ArInvoiceModel::Post()
 
 void ReceiptsModel::Load(bool all)
 {
+    all_ = all;
     items_ = ReceiptItems(code_, all);
     banks_ = LoadArAccounts(code_).banks;
     if (selected_) Select(selected_->item.batchno);
@@ -620,7 +621,7 @@ EntryResult ReceiptsModel::Record()
         RecordReceipt(code_, batchno, date, banks_[static_cast<size_t>(bank)].account, *received, discount, m::Trim(reference));
     switch (o.result) {
     case ReceiptResult::Recorded: {
-        Load(false);
+        Load(all_);
         Select(batchno);
         std::string text = "Receipt " + std::to_string(o.number) + " recorded";
         if (o.discount) text += ", with a discount of " + m::FormatAmount(o.discount);
@@ -638,4 +639,26 @@ EntryResult ReceiptsModel::Record()
     case ReceiptResult::UnknownBank: return refuse("bank", "The bank account isn't in the chart of accounts.");
     }
     return refuse("", "The receipt wasn't recorded.");
+}
+
+EntryResult ReceiptsModel::Reverse()
+{
+    if (!selected_) return refuse("", "Choose the invoice whose receipt is to be reversed.");
+    if (!HasReceipt()) return refuse("", "Nothing has been received on that invoice.");
+    if (date.size() != 8) return refuse("date", "Choose the reversal's date.");
+    const long batchno = selected_->item.batchno;
+    const std::vector<Receipt> receipts = LoadReceipts(code_, batchno);
+    const long number = receipts.empty() ? 0 : receipts.back().number;
+    switch (ReverseReceipt(code_, batchno, date)) {
+    case ReverseResult::Reversed:
+        Load(all_);
+        Select(batchno);
+        return {true, "", -1, "",
+                (number ? "Receipt " + std::to_string(number) : std::string("The receipt")) + " reversed: " +
+                    m::FormatAmount(selected_ ? selected_->item.remainder : 0) + " is owed on the invoice."};
+    case ReverseResult::NoReceipt: return refuse("", "That invoice has no receipt to reverse.");
+    case ReverseResult::ClosedPeriod:
+        return refuse("date", "The receipt has been transferred to the GL: choose a date in an open period for the reversal.");
+    }
+    return refuse("", "The receipt wasn't reversed.");
 }

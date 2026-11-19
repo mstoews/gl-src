@@ -171,6 +171,7 @@ const std::vector<std::pair<int, unsigned>> kReceiptsAnchors = {
     {IDC_RCP_GROUP, m::kTopLeft},   {IDC_RCP_WHO, m::kTopLeft},    {IDC_RCP_WHAT, m::kTopLeft},
     {IDC_RCP_DATE, m::kTopLeft},    {IDC_RCP_BANK, m::kTopLeft},   {IDC_RCP_AMOUNT, m::kTopLeft},
     {IDC_RCP_DISCOUNT, m::kTopLeft}, {IDC_RCP_REF, m::kTopLeft},   {IDC_RCP_RECORD, m::kTopLeft},
+    {IDC_RCP_REVERSE, m::kTopLeft},
 };
 
 const std::vector<std::pair<int, unsigned>> kListAnchors = {
@@ -1108,6 +1109,10 @@ protected:
             Record();
             return true;
         }
+        if (code == BN_CLICKED && id == IDC_RCP_REVERSE) {
+            Reverse();
+            return true;
+        }
         if (code == EN_CHANGE) return true;   // the receipt's fields aren't a record to save: never dirty
         return false;
     }
@@ -1190,6 +1195,32 @@ private:
         SetText(IDC_RCP_AMOUNT, s && s->item.remainder ? m::FormatAmount(s->item.remainder) : std::string());
         SetChecked(IDC_RCP_DISCOUNT, false);
         EnableWindow(Item(IDC_RCP_RECORD), s && s->item.remainder > 0);
+        EnableWindow(Item(IDC_RCP_REVERSE), model_.HasReceipt());
+    }
+
+    // G9: the latest receipt undone, after asking (D10).
+    void Reverse()
+    {
+        const ReceiptItem* s = model_.selected();
+        if (!s || !model_.HasReceipt()) return;
+        enum { kReverse = 101 };
+        if (fx::Ask(host() ? host()->hostWindow() : hwnd(), szApp,
+                    L"Reverse the latest receipt on invoice " + wide(TrimText(s->item.invoiceNo)) + L"?",
+                    L"What it received is owed again. If its journal has been transferred to the GL, it's reversed there on the date shown.",
+                    {{kReverse, L"Reverse receipt"}, {IDCANCEL, L"Keep it"}}, IDCANCEL, IDCANCEL) != kReverse)
+            return;
+        model_.date = fx::GetDateField(Item(IDC_RCP_DATE));
+        const EntryResult r = model_.Reverse();
+        if (!r.ok) {
+            if (r.field == "date") MarkField(IDC_RCP_DATE, r.message, true);
+            ShowInfo(fx::InfoKind::Error, wide(r.message));
+            return;
+        }
+        ClearMarks();
+        ShowList();
+        ShowSelected();
+        ShowInfo(fx::InfoKind::Success, wide(r.message));
+        NotifyDataChanged(data_group::kAr, hwnd());
     }
 
     void Record()

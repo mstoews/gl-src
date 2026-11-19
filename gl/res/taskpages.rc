@@ -2,6 +2,8 @@
 // taskpages.rc - the task page's form (spec #8 5.3; plan S8-M4 task 6). Written
 // by hand; #included by port.rc. Plain ASCII. One form for every task: the
 // action, the list with check boxes, the summary, progress and the result.
+// The second row (pay date, bank, first cheque) is Create Cheques' (spec #8
+// G8); the other tasks hide it and the list takes its room.
 // IDs in gl/port/PortIds.h ("task pages", 22400-22419).
 //
 
@@ -18,8 +20,14 @@ FONT 9, "Segoe UI"
  LTEXT "", IDC_TK_LOPTION, 330, 7, 64, 8
  CONTROL "", IDC_TK_DATE, "SysDateTimePick32", DTS_SHORTDATEFORMAT | WS_TABSTOP, 396, 4, 72, 12
  COMBOBOX IDC_TK_PERIOD, 396, 4, 110, 80, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
- LTEXT "", IDC_TK_SUMMARY, 4, 22, 592, 8, SS_ENDELLIPSIS | SS_NOPREFIX
- CONTROL "", IDC_TK_LIST, "SysListView32", LVS_REPORT | LVS_SINGLESEL | LVS_SHOWSELALWAYS | LVS_NOSORTHEADER | WS_BORDER | WS_TABSTOP, 4, 34, 592, 262
+ LTEXT "&Pay on:", IDC_TK_LPAYDATE, 4, 23, 40, 8
+ CONTROL "", IDC_TK_PAYDATE, "SysDateTimePick32", DTS_SHORTDATEFORMAT | WS_TABSTOP, 46, 20, 72, 12
+ LTEXT "Ban&k:", IDC_TK_LBANK, 128, 23, 26, 8
+ COMBOBOX IDC_TK_BANK, 156, 20, 160, 80, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+ LTEXT "First c&heque:", IDC_TK_LNUMBER, 326, 23, 50, 8
+ EDITTEXT IDC_TK_NUMBER, 378, 20, 60, 12, ES_NUMBER | ES_AUTOHSCROLL
+ LTEXT "", IDC_TK_SUMMARY, 4, 36, 592, 8, SS_ENDELLIPSIS | SS_NOPREFIX
+ CONTROL "", IDC_TK_LIST, "SysListView32", LVS_REPORT | LVS_SINGLESEL | LVS_SHOWSELALWAYS | LVS_NOSORTHEADER | WS_BORDER | WS_TABSTOP, 4, 48, 592, 248
  CONTROL "", IDC_TK_PROGRESS, "msctls_progress32", WS_BORDER, 4, 300, 592, 10
  LTEXT "", IDC_TK_RESULT, 4, 314, 592, 12, SS_ENDELLIPSIS | SS_NOPREFIX
 }

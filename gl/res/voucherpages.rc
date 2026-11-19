@@ -186,6 +186,7 @@ FONT 9, "Segoe UI"
  LTEXT "&Reference:", -1, 346, 120, 50, 8
  EDITTEXT IDC_RCP_REF, 398, 118, 100, 12, ES_AUTOHSCROLL
  DEFPUSHBUTTON "R&ecord receipt", IDC_RCP_RECORD, 398, 138, 80, 14
+ PUSHBUTTON "Re&verse last receipt", IDC_RCP_REVERSE, 482, 138, 90, 14
 }
 
 // ---- The voucher list -------------------------------------------------------------------------

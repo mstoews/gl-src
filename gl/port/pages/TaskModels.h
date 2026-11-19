@@ -49,6 +49,17 @@ constexpr unsigned kGlVouchers = 1, kGlBalances = 2, kAp = 4, kAr = 8, kAssets =
 enum class VoucherKind { Gl, ApInvoice, ApCash, Ar };
 enum class TaskOption { None, Date, Period };   // a date (yyyymmdd) or a period number the task needs
 
+// Create Cheques' further options (spec #8 G8): the payment date, the bank the
+// cheques are drawn on and the first cheque's number, as the classic screen
+// asks them. DefaultPaymentOptions fills them as that screen does: today, the
+// first bank, NextChequeNumber.
+struct PaymentOptions {
+    std::string payDate;                                      // yyyymmdd
+    std::vector<std::pair<std::string, std::string>> banks;   // the bank's short name, what the list shows
+    std::string bank;                                         // a short name from banks
+    long firstNumber = 0;
+};
+
 class TaskModel {
 public:
     virtual ~TaskModel() = default;
@@ -57,11 +68,17 @@ public:
     virtual std::string Action() const = 0;   // "Post"
     virtual std::vector<std::pair<std::string, int>> Columns() const = 0;   // heading, width at 96 DPI
     virtual bool PerItem() const { return true; }
+    // The rows have check boxes: every per-item task, and Create Cheques
+    // (whole, but its boxes pay or hold each invoice).
+    virtual bool Checks() const { return PerItem(); }
     virtual bool Writes() const { return true; }
     virtual unsigned Groups() const = 0;
     virtual TaskOption Option() const { return TaskOption::None; }
     virtual std::string OptionLabel() const { return {}; }
     std::string option;   // as the page sets it: yyyymmdd, or the period's number
+    virtual bool HasPaymentOptions() const { return false; }
+    virtual PaymentOptions DefaultPaymentOptions(cb4sqlite::Code4& /*code*/) const { return {}; }
+    PaymentOptions payment;   // as the page sets it (HasPaymentOptions)
 
     virtual std::vector<TaskRow> Load(cb4sqlite::Code4& code) = 0;
     // Per item: one row. Whole: every checked row at once (most ignore them).
@@ -94,5 +111,10 @@ std::unique_ptr<TaskModel> MakeDepreciationTask(long iniBatchno);
 std::unique_ptr<TaskModel> MakeYearEndTask();
 std::unique_ptr<TaskModel> MakePurgePayablesTask();
 std::unique_ptr<TaskModel> MakePurgeReceivablesTask();
+// Create Cheques (TAPCreatePayment): every open item, checked when this run
+// would pay it (due by the option's date, or forced). Checking a held or
+// not-yet-due invoice releases or forces it; unchecking one holds it (H), as
+// the classic Hold/Force does; then the cheques are made from `payment`. A run
+// that's refused puts the holds back as they were.
 std::unique_ptr<TaskModel> MakeCreateChequesTask(const std::string& payDate);
 std::unique_ptr<TaskModel> MakeBackupTask(const std::string& databaseUtf8, const std::string& todayYyyymmdd);

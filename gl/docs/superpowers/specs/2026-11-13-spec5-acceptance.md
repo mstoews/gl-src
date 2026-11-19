@@ -252,9 +252,9 @@ Steps are numbered within their criterion: "2, step 3" is the third check box un
 | 5, step 2 | Post Voucher > General Ledger task page | Every postable voucher (101–104) starts checked: leave only 104 checked. |
 | 5, step 6 | Recover Purchase Voucher task page | Voucher 3's row says why it can't be recovered and has no check box. |
 | 5, step 7 | Update AR and AP task page | The page shows nothing waiting to transfer. |
-| 6, step 1 | Create Cheques task page | Type 11/05/26 in "Due by:". Invoices 1 and 3 are listed with what each owes. |
-| 6, step 2 | Create Cheques (classic) | Hold and Force are set in the classic dialog. Back on the task page, invoice 3's row says it's held and is unchecked. |
-| 6, step 3 | Create Cheques (classic), or the task page | The task page dates the cheques today and draws them on `GL_SETAT`'s first bank, numbering from the next cheque number (5002); the pay date and bank can't be typed. To get the sheet's figures (pay date 10/30/26, bank 102101), use the classic dialog. |
+| 6, step 1 | Create Cheques task page | Type 11/05/26 in "Due by:". Every open invoice is listed with what it owes: 1 and 3 (due) are checked; 7 (due 11/19) is unchecked, "Not due: check it to pay it now." Invoice 6 isn't listed (it's in a payment). The summary counts what's checked and what it comes to. |
+| 6, step 2 | Create Cheques task page | The check boxes are Hold and Force: uncheck invoice 3 (it will be held) and check invoice 7 (it will be forced). Nothing changes until **Create cheques**. |
+| 6, step 3 | Create Cheques task page | "Pay on:" 10/30/26, "Bank:" the bank whose account is 102101 (the list shows each bank's account), "First cheque:" 5002 (filled in). **Create cheques**, confirm in the task dialog: the result line names cheque 5002 (2,220.00) and the bank, then "held 1, forced 1". The `sqlite3` figures are the same. A refused run (a cheque number on file, say) puts the holds back. |
 | 8, step 5 | Update AR and AP task page, then Post Voucher > General Ledger task page | The result line names GL voucher 105. On the Post page leave only 105 checked. |
 | 9, step 1 | Purge Paid Payables task page | The date is typed on the page as "Paid before:" (was "Cleared and paid before:"). For 10/30/26 the list is empty. |
 | 9, step 2 | Purge Paid Payables task page | With 12/31/26 the two invoices are listed. Press the action button, confirm in the task dialog; the result line reports what was purged. |

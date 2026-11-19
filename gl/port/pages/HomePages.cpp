@@ -26,6 +26,7 @@
 #include "../UiState.h"
 #include "../Vouchers.h"
 #include "../reports/ReportDesigner.h"
+#include "../reports/ReportList.h"   // Export and Import (G2)
 #include "../reports/RunReport.h"
 #include "CustomersPage.h"
 #include "HomeModels.h"
@@ -86,7 +87,8 @@ const std::vector<std::pair<int, unsigned>> kHomeAnchors = {
 
 const std::vector<std::pair<int, unsigned>> kGalleryAnchors = {
     {IDC_RG_OPEN, m::kTopLeft},   {IDC_RG_FAVOURITE, m::kTopLeft}, {IDC_RG_NEW, m::kTopLeft}, {IDC_RG_MODIFY, m::kTopLeft},
-    {IDC_RG_COPY, m::kTopLeft},   {IDC_RG_DELETE, m::kTopLeft},    {IDC_RG_FILTER, m::kTopWide}, {IDC_RG_LIST, m::kAll},
+    {IDC_RG_COPY, m::kTopLeft},   {IDC_RG_DELETE, m::kTopLeft},    {IDC_RG_EXPORT, m::kTopLeft}, {IDC_RG_IMPORT, m::kTopLeft},
+    {IDC_RG_FILTER, m::kTopWide}, {IDC_RG_LIST, m::kAll},
 };
 
 bool shownNow(UINT msg, WPARAM wp, LPARAM lp)
@@ -241,7 +243,7 @@ protected:
         ListView_EnableGroupView(list_, TRUE);
         SendDlgItemMessageW(form(), IDC_RG_FILTER, EM_SETCUEBANNER, TRUE, reinterpret_cast<LPARAM>(L"Search the reports"));
         design_ = rw::MayDesignReports(cb, szMsg);   // Spec #7 D8: the Report Writer right
-        for (int id : {IDC_RG_NEW, IDC_RG_MODIFY, IDC_RG_COPY, IDC_RG_DELETE}) EnableWindow(Item(id), design_);
+        for (int id : {IDC_RG_NEW, IDC_RG_MODIFY, IDC_RG_COPY, IDC_RG_DELETE, IDC_RG_IMPORT}) EnableWindow(Item(id), design_);
         Load();
         return true;
     }
@@ -276,6 +278,16 @@ protected:
                 ShowInfo(fx::InfoKind::Information, L"Choose a user report: the built-in ones can't be changed.");
             }
             return true;
+        case IDC_RG_EXPORT:
+            if (e && e->definition) ExportReportDefinition(host()->hostWindow(), e->definition);
+            else ShowInfo(fx::InfoKind::Information, L"Choose a user report: the built-in ones can't be exported.");
+            return true;
+        case IDC_RG_IMPORT:
+            if (const long number = ImportReportDefinition(host()->hostWindow())) {
+                Load();
+                SelectDefinition(number);
+            }
+            return true;
         case IDC_RG_DELETE:
             if (e && e->definition) {
                 enum { kDelete = 101 };
@@ -304,6 +316,7 @@ protected:
             const GalleryEntry* e = Selected();
             const bool user = e && e->definition;
             for (int id : {IDC_RG_MODIFY, IDC_RG_COPY, IDC_RG_DELETE}) EnableWindow(Item(id), design_ && user);
+            EnableWindow(Item(IDC_RG_EXPORT), user);
             if (e) SetDlgItemTextW(form(), IDC_RG_FAVOURITE, model_.IsFavourite(*e) ? L"Un&favourite" : L"&Favourite");
             result = 0;
             return true;
@@ -383,6 +396,19 @@ private:
                 }
         SendMessageW(list_, WM_SETREDRAW, TRUE, 0);
         InvalidateRect(list_, nullptr, TRUE);
+    }
+
+    // After Import: the new report chosen, in its group.
+    void SelectDefinition(long number)
+    {
+        for (size_t row = shown_.size(); row-- > 0;)
+            if (model_.entries()[shown_[row]].definition == number) {
+                ListView_SetItemState(list_, -1, 0, LVIS_SELECTED);
+                ListView_SetItemState(list_, static_cast<int>(row), LVIS_SELECTED | LVIS_FOCUSED, LVIS_SELECTED | LVIS_FOCUSED);
+                ListView_EnsureVisible(list_, static_cast<int>(row), FALSE);
+                SetFocus(list_);
+                return;
+            }
     }
 
     const GalleryEntry* Selected() const

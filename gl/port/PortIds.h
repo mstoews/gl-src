@@ -77,6 +77,8 @@
 #define IDC_RG_DELETE           22535
 #define IDC_RG_FILTER           22536
 #define IDC_RG_LIST             22537
+#define IDC_RG_EXPORT           22538
+#define IDC_RG_IMPORT           22539
 #define IDC_TK_ACTION           22400
 #define IDC_TK_STOP             22401
 #define IDC_TK_ALL              22402
@@ -89,6 +91,12 @@
 #define IDC_TK_LIST             22409
 #define IDC_TK_PROGRESS         22410
 #define IDC_TK_RESULT           22411
+#define IDC_TK_LPAYDATE         22412   // Create Cheques' options (spec #8 G8)
+#define IDC_TK_PAYDATE          22413
+#define IDC_TK_LBANK            22414
+#define IDC_TK_BANK             22415
+#define IDC_TK_LNUMBER          22416
+#define IDC_TK_NUMBER           22417
 
 // ---- controls --------------------------------------------------------------
 
@@ -264,6 +272,7 @@
 #define IDC_RCP_DISCOUNT        22215
 #define IDC_RCP_REF             22216
 #define IDC_RCP_RECORD          22217
+#define IDC_RCP_REVERSE         22218   // spec #8 G9
 #define IDC_VL_FILTER           22300   // the voucher list
 #define IDC_VL_LIST             22301
 #define IDC_VL_OPEN             22302

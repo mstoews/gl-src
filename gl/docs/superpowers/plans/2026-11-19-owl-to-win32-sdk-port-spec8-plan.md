@@ -717,6 +717,11 @@ S is less than a day, M is 1–3 days, L is 3–6 days. **Parallel work:** M2, M
 >   - Update AR and AP making GL vouchers 105 and 106.
 >
 >   `gl_tests` 216.
+> - **Gaps fixed after the sheet (G2, G8, G9):**
+>   - G2: the gallery has **Export...** and **Import...**. They are the report list's code, made free functions (`ExportReportDefinition`, `ImportReportDefinition` in `reports/ReportList.h`); Import is greyed without the Report Writer right, Export works on a user report only.
+>   - G8: the task form has a second row, Create Cheques' "Pay on:", "Bank:" (each bank's account shown) and "First cheque:", filled as the classic screen fills them; other tasks hide it and the list takes its room. Create Cheques now lists every open invoice with check boxes (`TaskModel::Checks`): checked is paid, unchecked is held (H); a held or not-yet-due invoice that's checked is released (O) or forced (F), as TAPHoldForce does. A refused run puts the controls back.
+>   - G9: the receipts page's **Reverse last receipt** (`ReceiptsModel::Reverse`, ReverseReceipt) asks first and dates the reversal by the page's Date.
+>   - `gl_tests/test_gaps8.cpp` (4 cases); `gl_tests` 220. The Spec #5, #6 and #7 redesign tables and the Spec #8 gap triage are updated.
 > - **Still to do (task 2):** the Release build check on the test machine, the walkthrough with a witness, triage of what it finds, and sign-off. Then M6 task 4 removes the classic screens.
 
 1. **`gl/docs/superpowers/specs/2026-11-19-spec8-acceptance.md`**, in the Spec #7 sheet's shape, with spec §15's checks. Each of the Spec #1–#7 sheets gets a "redesign" column for the steps whose screens moved, saying where the step is now done; the expected figures don't change. A `gl_tests` case runs the moved steps through the page models and checks every figure.

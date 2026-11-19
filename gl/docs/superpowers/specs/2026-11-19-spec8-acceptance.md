@@ -219,13 +219,13 @@ Known before the walkthrough:
 | # | Gap | Triage |
 |---|---|---|
 | G1 | The report options are dialogs before the preview (and again from its Refresh), not panels above it; the Report Designer is a dialog, not a page (plan M5 tasks 3 and 5). | Deferred: a later spec. |
-| G2 | The report gallery has no Export... or Import... of report definitions (`.gldef`); Spec #7's #7, #8 and #9 export and import through "Custom Report (classic)". | To fix before the classic list goes, or filed. ____ |
+| G2 | The report gallery has no Export... or Import... of report definitions (`.gldef`); Spec #7's #7, #8 and #9 export and import through "Custom Report (classic)". | Fixed (S8-M7): **Export...** and **Import...** on the gallery, the list's own code; Spec #7's redesign table updated. |
 | G3 | Budget Data, Company Profile's accounts and banks, Print Cheques, Confirm Printed Cheques, Restore and Bank Reconciliation are still dialogs. | Deferred: a later spec. |
 | G4 | Removing the classic dialogs, `MainDialog`, the old controls, `MdiFrame` and the MANILA menu resource (plan M6 task 4) waits for this sign-off. | After sign-off. |
 | G5 | Long one-transaction tasks (Update AR and AP, the depreciation run, year end, Purge Paid Payables, Create Cheques) show no progress within the step; Stop works before they start. | Accepted / filed. ____ |
 | G6 | `/screenshots` and `/checkres` run at the system scale only; the 150% set needs the display set to 150%. | Done by hand in #10. |
-| G8 | The Create Cheques task page dates the cheques today and draws on GL_SETAT's first bank; neither can be chosen, and Hold / Force stay in the classic dialog. Spec #5's #6 uses "Create Cheques (classic)" for its pay date and bank. | To fix before the classic dialog goes, or filed. ____ |
-| G9 | The receipts page can't reverse a receipt; Spec #6's #6 uses "Clear Receipts (classic)". | To fix before the classic dialog goes, or filed. ____ |
+| G8 | The Create Cheques task page dates the cheques today and draws on GL_SETAT's first bank; neither can be chosen, and Hold / Force stay in the classic dialog. Spec #5's #6 uses "Create Cheques (classic)" for its pay date and bank. | Fixed (S8-M7): "Pay on:", "Bank:" and "First cheque:" on the page; the check boxes hold, release and force. Spec #5's redesign table updated. |
+| G9 | The receipts page can't reverse a receipt; Spec #6's #6 uses "Clear Receipts (classic)". | Fixed (S8-M7): **Reverse last receipt**, dated by the page's Date. Spec #6's redesign table updated. |
 | G7 | The GL voucher page has no Print: a voucher's slip prints from "General Ledger Voucher (classic)" or Reporting > Voucher Slips (Spec #3's #10). File > Print with no preview active still opens the old report list (1022); only Custom Report opens the gallery. | To decide before the classic screens go. ____ |
 
 Found in the walkthrough:

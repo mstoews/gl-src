@@ -45,6 +45,105 @@
 
 #include "../LegacyIds.h"   // last: see LegacyIds.h
 
+static std::string Stamp()
+{
+    SYSTEMTIME t{};
+    GetLocalTime(&t);
+    char b[32];
+    std::snprintf(b, sizeof b, "%04u%02u%02u%02u%02u%02u", t.wYear, t.wMonth, t.wDay, t.wHour, t.wMinute, t.wSecond);
+    return b;
+}
+
+// ---- Export and Import (spec #7 6.1); the report gallery shares them (spec #8 G2) ----
+
+// The filter's pairs are separated by NULs (and it ends with two).
+static constexpr wchar_t kFileFilter[] = L"Report definitions (*.gldef)\0*.gldef\0All files (*.*)\0*.*\0";
+
+void ExportReportDefinition(HWND owner, long number)
+{
+    std::optional<rw::StoredDefinition> d;
+    try {
+        d = rw::FindDefinition(cb, number);
+    } catch (const std::exception&) {
+    }
+    if (!d) {
+        MessageBoxW(owner, L"The report is no longer on file.", szApp, MB_OK | MB_ICONINFORMATION);
+        return;
+    }
+    std::wstring name = fx::Utf8ToWide(d->name);
+    for (wchar_t& ch : name)
+        if (wcschr(L"\\/:*?\"<>|", ch)) ch = L'-';
+    wchar_t file[MAX_PATH] = {};
+    wcsncpy_s(file, (name + L".gldef").c_str(), _TRUNCATE);
+    OPENFILENAMEW ofn{};
+    ofn.lStructSize = sizeof ofn;
+    ofn.hwndOwner = owner;
+    ofn.lpstrFilter = kFileFilter;
+    ofn.lpstrFile = file;
+    ofn.nMaxFile = MAX_PATH;
+    ofn.lpstrDefExt = L"gldef";
+    ofn.lpstrTitle = L"Export the report";
+    ofn.Flags = OFN_OVERWRITEPROMPT | OFN_PATHMUSTEXIST | OFN_NOCHANGEDIR;
+    if (!GetSaveFileNameW(&ofn)) return;
+    FILE* f = nullptr;
+    bool ok = _wfopen_s(&f, file, L"wb") == 0 && f;
+    if (ok) {
+        ok = std::fwrite(d->text.data(), 1, d->text.size(), f) == d->text.size();
+        ok = std::fclose(f) == 0 && ok;
+    }
+    if (!ok)
+        MessageBoxW(owner, (std::wstring(L"The file could not be written:\n\n") + file).c_str(), szApp,
+                    MB_OK | MB_ICONSTOP);
+}
+
+long ImportReportDefinition(HWND owner)
+{
+    wchar_t file[MAX_PATH] = {};
+    OPENFILENAMEW ofn{};
+    ofn.lStructSize = sizeof ofn;
+    ofn.hwndOwner = owner;
+    ofn.lpstrFilter = kFileFilter;
+    ofn.lpstrFile = file;
+    ofn.nMaxFile = MAX_PATH;
+    ofn.lpstrTitle = L"Import a report";
+    ofn.Flags = OFN_FILEMUSTEXIST | OFN_PATHMUSTEXIST | OFN_NOCHANGEDIR;
+    if (!GetOpenFileNameW(&ofn)) return 0;
+    std::string text;
+    FILE* f = nullptr;
+    if (_wfopen_s(&f, file, L"rb") != 0 || !f) {
+        MessageBoxW(owner, (std::wstring(L"The file could not be read:\n\n") + file).c_str(), szApp,
+                    MB_OK | MB_ICONSTOP);
+        return 0;
+    }
+    char buf[4096];
+    size_t got = 0;
+    while ((got = std::fread(buf, 1, sizeof buf, f)) > 0 && text.size() < 1000000) text.append(buf, got);
+    std::fclose(f);
+    if (text.size() >= 1000000) {
+        MessageBoxW(owner, L"The file is too large to be a report definition.", szApp, MB_OK | MB_ICONEXCLAMATION);
+        return 0;
+    }
+    rw::ImportResult result;
+    try {
+        // Without logins (GL.INI [ACCESS] PSW=F) the user is NOLOGIN: kept blank, as the designer does.
+        const std::string user = TrimText(szUser) == "NOLOGIN" ? std::string() : TrimText(szUser);
+        result = rw::ImportDefinition(cb, text, user, Stamp());
+    } catch (const std::exception& e) {
+        MessageBoxW(owner, (L"The report could not be imported:\n\n" + fx::Utf8ToWide(e.what())).c_str(), szApp,
+                    MB_OK | MB_ICONSTOP);
+        return 0;
+    }
+    if (!result.number) {
+        MessageBoxW(owner, (L"The report wasn't imported.\n\n" + fx::Utf8ToWide(result.refusal)).c_str(), szApp,
+                    MB_OK | MB_ICONEXCLAMATION);
+        return 0;
+    }
+    std::wstring said = L"Imported as “" + fx::Utf8ToWide(result.name) + L"”.";
+    if (result.renamed) said += L"\n\nAnother report had the file's name, so this one is numbered.";
+    MessageBoxW(owner, said.c_str(), szApp, MB_OK | MB_ICONINFORMATION);
+    return result.number;
+}
+
 namespace {
 
 constexpr int kGridId = ID_DISTLIST;   // 1075
@@ -293,106 +392,16 @@ private:
         SetFocus(grid_.hwnd());
     }
 
-    // ---- Export and Import (spec #7 6.1) ------------------------------------------------
-
-    // The filter's pairs are separated by NULs (and it ends with two).
-    static constexpr wchar_t kFileFilter[] = L"Report definitions (*.gldef)\0*.gldef\0All files (*.*)\0*.*\0";
-
-    void Export(long number)
-    {
-        std::optional<rw::StoredDefinition> d;
-        try {
-            d = rw::FindDefinition(cb, number);
-        } catch (const std::exception&) {
-        }
-        if (!d) {
-            MessageBoxW(hwnd(), L"The report is no longer on file.", szApp, MB_OK | MB_ICONINFORMATION);
-            return;
-        }
-        std::wstring name = fx::Utf8ToWide(d->name);
-        for (wchar_t& ch : name)
-            if (wcschr(L"\\/:*?\"<>|", ch)) ch = L'-';
-        wchar_t file[MAX_PATH] = {};
-        wcsncpy_s(file, (name + L".gldef").c_str(), _TRUNCATE);
-        OPENFILENAMEW ofn{};
-        ofn.lStructSize = sizeof ofn;
-        ofn.hwndOwner = hwnd();
-        ofn.lpstrFilter = kFileFilter;
-        ofn.lpstrFile = file;
-        ofn.nMaxFile = MAX_PATH;
-        ofn.lpstrDefExt = L"gldef";
-        ofn.lpstrTitle = L"Export the report";
-        ofn.Flags = OFN_OVERWRITEPROMPT | OFN_PATHMUSTEXIST | OFN_NOCHANGEDIR;
-        if (!GetSaveFileNameW(&ofn)) return;
-        FILE* f = nullptr;
-        bool ok = _wfopen_s(&f, file, L"wb") == 0 && f;
-        if (ok) {
-            ok = std::fwrite(d->text.data(), 1, d->text.size(), f) == d->text.size();
-            ok = std::fclose(f) == 0 && ok;
-        }
-        if (!ok)
-            MessageBoxW(hwnd(), (std::wstring(L"The file could not be written:\n\n") + file).c_str(), szApp,
-                        MB_OK | MB_ICONSTOP);
-    }
+    void Export(long number) { ExportReportDefinition(hwnd(), number); }
 
     void Import()
     {
-        wchar_t file[MAX_PATH] = {};
-        OPENFILENAMEW ofn{};
-        ofn.lStructSize = sizeof ofn;
-        ofn.hwndOwner = hwnd();
-        ofn.lpstrFilter = kFileFilter;
-        ofn.lpstrFile = file;
-        ofn.nMaxFile = MAX_PATH;
-        ofn.lpstrTitle = L"Import a report";
-        ofn.Flags = OFN_FILEMUSTEXIST | OFN_PATHMUSTEXIST | OFN_NOCHANGEDIR;
-        if (!GetOpenFileNameW(&ofn)) return;
-        std::string text;
-        FILE* f = nullptr;
-        if (_wfopen_s(&f, file, L"rb") != 0 || !f) {
-            MessageBoxW(hwnd(), (std::wstring(L"The file could not be read:\n\n") + file).c_str(), szApp,
-                        MB_OK | MB_ICONSTOP);
-            return;
-        }
-        char buf[4096];
-        size_t got = 0;
-        while ((got = std::fread(buf, 1, sizeof buf, f)) > 0 && text.size() < 1000000) text.append(buf, got);
-        std::fclose(f);
-        if (text.size() >= 1000000) {
-            MessageBoxW(hwnd(), L"The file is too large to be a report definition.", szApp, MB_OK | MB_ICONEXCLAMATION);
-            return;
-        }
-        rw::ImportResult result;
-        try {
-            // Without logins (GL.INI [ACCESS] PSW=F) the user is NOLOGIN: kept blank, as the designer does.
-            const std::string user = TrimText(szUser) == "NOLOGIN" ? std::string() : TrimText(szUser);
-            result = rw::ImportDefinition(cb, text, user, now());
-        } catch (const std::exception& e) {
-            MessageBoxW(hwnd(), (L"The report could not be imported:\n\n" + fx::Utf8ToWide(e.what())).c_str(), szApp,
-                        MB_OK | MB_ICONSTOP);
-            return;
-        }
-        if (!result.number) {
-            MessageBoxW(hwnd(), (L"The report wasn't imported.\n\n" + fx::Utf8ToWide(result.refusal)).c_str(), szApp,
-                        MB_OK | MB_ICONEXCLAMATION);
-            return;
-        }
+        const long number = ImportReportDefinition(hwnd());
+        if (!number) return;
         Fill(grid_.ActiveRow());
         for (size_t i = 0; i < entries_.size(); ++i)
-            if (entries_[i].definition == result.number) grid_.SetActiveCell(1, static_cast<int>(i) + 1);
+            if (entries_[i].definition == number) grid_.SetActiveCell(1, static_cast<int>(i) + 1);
         SetFocus(grid_.hwnd());
-        std::wstring said = L"Imported as “" + fx::Utf8ToWide(result.name) + L"”.";
-        if (result.renamed) said += L"\n\nAnother report had the file's name, so this one is numbered.";
-        MessageBoxW(hwnd(), said.c_str(), szApp, MB_OK | MB_ICONINFORMATION);
-    }
-
-    static std::string now()
-    {
-        SYSTEMTIME t{};
-        GetLocalTime(&t);
-        char b[32];
-        std::snprintf(b, sizeof b, "%04u%02u%02u%02u%02u%02u", t.wYear, t.wMonth, t.wDay, t.wHour, t.wMinute, t.wSecond);
-        return b;
     }
 
     void Delete()

@@ -208,14 +208,14 @@ The Report Designer, the calculation dialog, the questions, the preview (with it
 | 6, first step (**Copy...**) | Gallery, **Copy**. | None. |
 | 6, second step (**Delete**) | Gallery, **Delete**. | A task dialog asks "Delete the report “Copy of Sales by product (made)”?" ("It can't be undone."); the buttons are **Delete report** and **Keep it**, not **Yes**. |
 | 6, third step (Trial Balance) | Gallery, select **Trial Balance**. | **Modify**, **Copy** and **Delete** are greyed on a built-in report instead of explaining. The messages quoted are in **Custom Report (classic)**. |
-| 7, first step (**Export...** the definition) | **Custom Report (classic)**. | The gallery has no **Export...** button. |
+| 7, first step (**Export...** the definition) | Gallery, select the report, **Export...**. | None: the same save dialog and file. On a built-in report the info bar says it can't be exported. |
 | 7, second step (**Print**, then the preview's **Export...**) | Gallery, **Open**. | None. |
-| 7, fourth and last steps (**Import...**) | **Custom Report (classic)**. | The gallery has no **Import...** button. |
+| 7, fourth and last steps (**Import...**) | Gallery, **Import...**. | None: the same messages; the imported report is then selected in "User reports". |
 | 7, fifth step (**Print**) | Gallery, **Open**. | None. |
-| 8, first step (`CLERK`'s buttons) | Gallery. | **New report**, **Modify**, **Copy** and **Delete** are greyed; **Open** isn't. Import and Export are checked in **Custom Report (classic)**. |
+| 8, first step (`CLERK`'s buttons) | Gallery. | **New report**, **Modify**, **Copy** and **Delete** are greyed; **Open** isn't. **Import...** is greyed too; **Export...** isn't (it only reads). |
 | 8, second step (**Print**) | Gallery, **Open**. | None. |
 | 8, third step (`ADMIN`'s buttons; User Access) | Gallery; **Maintenance > User Access** is now a page. | In the gallery, **Modify**, **Copy** and **Delete** are available only with a user report selected. On the User Access page, select `CLERK`: level B's commands are check boxes grouped by menu, and "Report Writer (design reports)" is unticked (off). Leave without **Save** in place of **Cancel**. |
-| 9, first step (**Import...** `old.gldef`) | **Custom Report (classic)** for the import; gallery **Modify** and **Open** for the rest. | The designer's "(missing)" message and the preview's note are the same. |
+| 9, first step (**Import...** `old.gldef`) | Gallery **Import...**, then **Modify** and **Open**. | The designer's "(missing)" message and the preview's note are the same. |
 
 ## Gaps and triage
 
