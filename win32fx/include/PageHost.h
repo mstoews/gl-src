@@ -54,6 +54,11 @@ public:
     void ClosePage();
     void SetTitle(const wchar_t* title);
 
+    // The command that opens this page again (0: none, it can't be pinned),
+    // and whether its tab is pinned: reopened when the program starts.
+    WORD commandId = 0;
+    bool pinned = false;
+
 protected:
     LRESULT DefaultProc(UINT msg, WPARAM wp, LPARAM lp) override;
     // Under an MDI host, reports WM_MDIACTIVATE to it; an override must call this first.

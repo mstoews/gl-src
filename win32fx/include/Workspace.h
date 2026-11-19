@@ -73,7 +73,10 @@ public:
 
     // ---- pages ----
     const std::vector<HWND>& pages() const noexcept { return pages_; }
-    void CloseAllPages();
+    // Closes every page that may close (a dirty Page asks); false if one stayed.
+    bool CloseAllPages();
+    // The pinned pages' commands, in tab order.
+    std::vector<WORD> PinnedCommands() const;
 
     // PageHost
     HWND hostWindow() const noexcept override { return hwnd(); }
@@ -96,6 +99,8 @@ protected:
     virtual bool IsCommandEnabled(WORD /*id*/) const { return true; }
     // A right-click on the empty page area.
     virtual void OnPageAreaContextMenu(POINT /*screen*/) {}
+    // A tab was pinned or unpinned.
+    virtual void OnPinsChanged() {}
 
     bool OnCreate(LPCREATESTRUCTW cs) override;
     bool OnSize(UINT type, int cx, int cy) override;

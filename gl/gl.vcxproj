@@ -81,6 +81,7 @@
     <ClInclude Include="port\TableList.h" />
     <ClInclude Include="port\Tables.h" />
     <ClInclude Include="port\TransactionInquiry.h" />
+    <ClInclude Include="port\UiState.h" />
     <ClInclude Include="port\VoucherBrowser.h" />
     <ClInclude Include="port\VoucherEntry.h" />
     <ClInclude Include="port\VoucherLists.h" />
@@ -89,6 +90,8 @@
     <ClInclude Include="port\YearEnd.h" />
     <ClInclude Include="port\db_gl_dist.h" />
     <ClInclude Include="port\db_gl_distb.h" />
+    <ClInclude Include="port\pages\CustomersModel.h" />
+    <ClInclude Include="port\pages\CustomersPage.h" />
     <ClInclude Include="port\reports\AccountReports.h" />
     <ClInclude Include="port\reports\ApReports.h" />
     <ClInclude Include="port\reports\ArReports.h" />
@@ -147,12 +150,15 @@
     <ClCompile Include="port\ResourceCheck.cpp" />
     <ClCompile Include="port\TableList.cpp" />
     <ClCompile Include="port\TransactionInquiry.cpp" />
+    <ClCompile Include="port\UiState.cpp" />
     <ClCompile Include="port\VoucherBrowser.cpp" />
     <ClCompile Include="port\VoucherEntry.cpp" />
     <ClCompile Include="port\VoucherLists.cpp" />
     <ClCompile Include="port\VoucherPosting.cpp" />
     <ClCompile Include="port\Vouchers.cpp" />
     <ClCompile Include="port\YearEnd.cpp" />
+    <ClCompile Include="port\pages\CustomersModel.cpp" />
+    <ClCompile Include="port\pages\CustomersPage.cpp" />
     <ClCompile Include="port\reports\AccountReports.cpp" />
     <ClCompile Include="port\reports\ApReports.cpp" />
     <ClCompile Include="port\reports\ArReports.cpp" />
