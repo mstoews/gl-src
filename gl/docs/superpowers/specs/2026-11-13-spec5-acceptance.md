@@ -220,6 +220,45 @@ Each previews; print at least the landscape ones to PDF and check that no column
 | G5 | The Linux ASan/UBSan build hasn't been run for Spec #5. | No Linux machine this round. | Run `tools/linux/build_tests.sh --run`. |
 | G6 | The AP reports haven't been run on the deployed company's data. | Its AP data is the test data of G2. | After go-live. |
 
+## Redesign (Spec #8)
+
+The figures and checks above stay as they are. This table says where each step whose screen moved is done in the redesigned program (Spec #8, §15 criterion 2). Until Spec #8's acceptance, the old dialog of each moved screen is still reachable as a "(classic)" entry in the navigation pane, so each step can be done either way.
+
+Steps are numbered within their criterion: "2, step 3" is the third check box under criterion 2. Steps not listed use screens that didn't move (Print Cheques, Confirm Printed Cheques, Bank Reconciliation, the reports and the `sqlite3` queries).
+
+| Criterion and step | Where it's done now | What differs |
+|---|---|---|
+| 1, step 1 | Vendors page, **New** | The AP (221002) and VAT (148000) accounts fill in from `GL_SETAT`, as before. **Save** instead of **Add**. |
+| 1, step 2 | Vendors page | Pick V004 in the list (type to filter it) instead of typing the number and **Enter**. Change the terms and **Save**: no "modify?" question. |
+| 1, step 3 | Vendors page | Pick V001, **Delete**; the task dialog asks with named buttons. The refusal shows in the information bar. |
+| 1, step 4 | Vendors page | Pick V004, **Delete**, confirm in the task dialog. The list itself shows V001–V003; there's no **Search**. |
+| 1, step 5 | Vendors page | Typing `V999` in the list's filter leaves the list empty, instead of the "There is no vendor V999." message. |
+| 2, step 1 | AP voucher page (Purchase Invoice Vouchers) | The vendor is a lookup; choosing V001 fills its accounts, VAT %, W/H %, terms and type. The voucher number (7) is assigned when it's first saved. |
+| 2, step 2 | AP voucher page | Type the line in the entry grid (account 501000, amount 1,120.00). "The voucher's lines, as saved" under the grid shows the four lines as you type; there's no **Add** per line and no line number. **Save** saves the voucher. |
+| 2, step 3 | AP voucher page | A second grid row (751000, 560.00); the lines under the grid are recomputed as you type. |
+| 2, step 4 | AP voucher page | Delete the 751000 row in the grid, then **Save**. |
+| 2, step 5 | AP voucher page | Run the query after **Save**. |
+| 2, step 6 | AP voucher page | Save voucher 7, then **New**. Choosing **Save** with invoice INV-1001 is refused in the information bar; nothing is saved. |
+| 2, step 7 | AP voucher page | Leave the page instead of **Close**. |
+| 3, step 1 | Cancel Voucher > Purchase task page | Tick voucher 2 (nothing starts checked), press the action button, confirm in the task dialog. |
+| 3, step 2 | Post Voucher > Purchase task page | Vouchers 1 and 7 are listed and checked. The result line reports what was posted, instead of a message box. |
+| 3, step 3 | Recover Purchase Voucher task page | Tick voucher 7 (nothing starts checked), press the action button, confirm. |
+| 3, step 4 | Post Voucher > Purchase task page, or **Post** on the AP voucher page with voucher 7 shown | Voucher 7 starts checked. |
+| 3, step 7 | Recover Purchase Voucher task page | Voucher 6's row says why it can't be recovered and has no check box. |
+| 4, step 1 | AP voucher page for cash vouchers (Cash Invoice Vouchers) | The bank (102101) and cheque take the place of the AP account, due date and terms. The line is typed in the grid; **Save** saves the voucher (it becomes voucher 2), with no "keep it?" question. |
+| 4, step 2 | Cancel Voucher > Cash task page | Tick voucher 1, press the action button, confirm. |
+| 4, step 3 | Post Voucher > Cash task page, or **Post** on the cash voucher page with voucher 2 shown | Voucher 2 is listed and checked; the result line reports what was posted. |
+| 5, step 1 | Update AR and AP task page | The summary shows what's waiting; the action button runs it; the result line names the GL voucher made (104). It runs in the background. |
+| 5, step 2 | Post Voucher > General Ledger task page | Every postable voucher (101–104) starts checked: leave only 104 checked. |
+| 5, step 6 | Recover Purchase Voucher task page | Voucher 3's row says why it can't be recovered and has no check box. |
+| 5, step 7 | Update AR and AP task page | The page shows nothing waiting to transfer. |
+| 6, step 1 | Create Cheques task page | Type 11/05/26 in "Due by:". Invoices 1 and 3 are listed with what each owes. |
+| 6, step 2 | Create Cheques (classic) | Hold and Force are set in the classic dialog. Back on the task page, invoice 3's row says it's held and is unchecked. |
+| 6, step 3 | Create Cheques (classic), or the task page | The task page dates the cheques today and draws them on `GL_SETAT`'s first bank, numbering from the next cheque number (5002); the pay date and bank can't be typed. To get the sheet's figures (pay date 10/30/26, bank 102101), use the classic dialog. |
+| 8, step 5 | Update AR and AP task page, then Post Voucher > General Ledger task page | The result line names GL voucher 105. On the Post page leave only 105 checked. |
+| 9, step 1 | Purge Paid Payables task page | The date is typed on the page as "Paid before:" (was "Cleared and paid before:"). For 10/30/26 the list is empty. |
+| 9, step 2 | Purge Paid Payables task page | With 12/31/26 the two invoices are listed. Press the action button, confirm in the task dialog; the result line reports what was purged. |
+
 ## Gaps and triage
 
 Add one row for each `FAIL` or unexpected behaviour found during the walkthrough.

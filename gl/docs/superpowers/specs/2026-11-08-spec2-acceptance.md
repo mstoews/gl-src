@@ -231,6 +231,47 @@ Record `glaccts` and `gl_dist` for 101's accounts (111101, 410001-10, 410001-20)
 | G5 | After a year end, Transaction Inquiry's balance and adjustment posting use `openbal`, which year end leaves alone, as the original did. | Spec §12 Q6; the real data's year end has never run. | Settle before the first real year end. |
 | G6 | The `querySet` comparison rules follow `dbf2sqlite`'s translation, not CodeBase 4's documented behaviour. | Spec §12 Q5; no CodeBase source in the tree. | Confirm if the original build or its docs turn up. |
 
+## Redesign (Spec #8)
+
+The figures and checks above stay as they are. Spec #8 (`2026-11-19-owl-to-win32-sdk-port-spec8-design.md`, §15 criterion 2) moved many screens into pages in the main window; this table says where each step whose screen moved is done in the redesigned program. Until Spec #8's acceptance the old dialog of each moved screen is still reachable as a "(classic)" entry in the navigation pane, so each step can be done either way. Transaction Inquiry (#9), Budget Data (#10), Company Profile and Restore are still dialogs.
+
+| Criterion and step | Where it's done now | What differs |
+|---|---|---|
+| 1. Department Codes: add, change and delete dept `30` | Department Codes page | Save, not Add/Mod. The code can't be changed once saved. The delete asks in a task dialog with named buttons (for example "Delete department" / "Keep it"). |
+| 1. Medical Reps: add, change and delete `MR009` | Medical Reps page | As for Department Codes. |
+| 1. Doctor Codes: the same with `DR009` | Doctor Codes page | As for Department Codes. |
+| 1. Product Codes: the same with `P900`; a blank code; modifying P100 | Product Codes page | A blank code is marked as required and the information bar says why, instead of 4072. |
+| 1. Each screen's list shows the records, and picking a row shows it | The list on the left of each page | The list is always shown, filtered as you type. There is no Search or Med Reps / Doctor / Products button. |
+| 2. General Ledger Voucher opens with number 104, the list and the period combo | GL voucher page | A new voucher has no number until it's first saved; it gets 104 then. The lines are a grid on the page, not a separate Distribution List. |
+| 2. Enter the description, date and three lines | GL voucher page: the header, then the lines in the grid, then Save | The whole voucher is saved at once with Save; no Add/Mod per line and no line number field. The line's reference goes in the Document column, and the account name fills in. Totals and "Balanced." show live. |
+| 2. An unknown account, or a known account with dept `99` | GL voucher page, the grid | The cell is marked and the information bar says why; Save is refused, so nothing is saved. No beep and no account list. |
+| 3. Close and reopen; click Voucher and pick 104 | Transactions > Voucher List page: select 104, Open | Open shows voucher 104 on the GL voucher page. |
+| 3. Change the 410001 dept 10 line's credit to 250.00 | GL voucher page, the grid | Edit the cell, then Save. The totals show out of balance live, not as a red total row. |
+| 3. Delete the 410001 dept 20 line, add a 50.00 line | GL voucher page, the grid | Delete the row in the grid (no Yes / No question), add the new row, then Save. |
+| 3. New, one line, Close, answer No to 1056 | GL voucher page: New, one line, close the page | The unsaved-changes question is a task dialog with named buttons; choose the one that doesn't save. No number is assigned, so 105 is not used. |
+| 4. Prior Period Entry opens, captioned "Prior Period Adjustment Entry" | GL voucher page in adjustment mode (tab "Adjustment") | Same page as the GL voucher, in adjustment mode. |
+| 4. Choose voucher 101 (a normal voucher) | Prior Period Entry (classic) | The adjustment page moves only between adjustment vouchers, and the Voucher List opens 101 on the normal GL voucher page, so the page has no path to the refusal. |
+| 4. Voucher 103 opens normally | Voucher List page: Open 103, or the adjustment page's navigation | Open takes an adjustment to the GL voucher page in adjustment mode. |
+| 5. Post Voucher > General Ledger lists 101–104 | Post General Ledger task page | A list with check boxes, a summary and a Post button. 102 shows "Out of balance by 10.00." and has no check box. |
+| 5. Click Post; 102 is refused with 8116 | Post General Ledger task page: Post, then confirm in the task dialog | No 8116 message: 102 can't be checked and stays listed with its reason. The posting runs in the background and a result line says what was posted. |
+| 6. Add voucher 105 and keep it | GL voucher page: the lines, then Save | As in #2. |
+| 6. Under `/failpost 1`, Post | Post General Ledger task page | The failure shows in the information bar ("It failed: ...") naming the `/failpost` fault, not in a message box. |
+| 6. Start normally and Post again | Post General Ledger task page | 105 posts; 102 again has no check box. |
+| 7. Recover General Ledger Voucher lists 100, 101, 104 and 105 | Recover General Ledger task page | Nothing is checked to start. |
+| 7. Double-click 101 and answer Yes | Recover General Ledger task page: check 101, click Recover, confirm | The confirmation is a task dialog; a result line names what was recovered. |
+| 7. 101 opens in Voucher Entry again, and Post posts it | Voucher List page, Open; then the Post General Ledger task page | As in #3 and #5. |
+| 8. Cancel Voucher > General Ledger lists 102 | Cancel General Ledger task page | Nothing is checked to start. |
+| 8. Double-click 102 and answer Yes to 8099 | Cancel General Ledger task page: check 102, click Cancel vouchers, confirm | The confirmation is a task dialog with named buttons instead of 8099. |
+| 11. Set 101000's type to Retained earnings, then back to Balance Sheet | Chart of Accounts page: select 101000, change the type, Save | Save, not Add/Mod. |
+| 11. Year End Consolidation, Yes to 8111; refused, then run again | Year end task page: Close the year, then confirm | The confirmation is a task dialog instead of 8111. The list shows both type-R accounts with a note; the refusal says the chart needs exactly one retained earnings account and how many it has, without naming them. The result line reports the amount to retained earnings, not 340000's new balance. |
+| 12. Backup Databases suggests `dev-<today>.db`; save it | Backup task page: Back up, then confirm | No Save As dialog: the page shows the copy's name, `dev-<today>.db` beside `dev.db`, and the result line names the file. |
+| 12. Add account `150002` | Chart of Accounts page | Save, not Add/Mod. |
+| 12. 150002 is gone after the restore | Chart of Accounts page, the list | None. |
+| 13. The account list behaves as the Spec #1 sheet's #7 | Chart of Accounts page | The list is a filtered list, not a grid. See the Spec #1 sheet's redesign table for #7: the query, saved position and close/Search steps are done in Chart of Accounts (classic). |
+| 13. User Access, the Menu button: toggle a menu, OK saves, Close doesn't | User Access page | The selected user's level's commands are check boxes grouped by menu (checked = allowed), not PLUS / MINUS pictures. Save saves; leaving the user or closing the page with changes asks about them. |
+| 13. Right-click the account list and set the query `ACCOUNT = '4'` | Chart of Accounts (classic) | The page's list has no query. |
+| 14. The Spec #1 sheet's criteria still pass | As in the Spec #1 sheet's redesign table | None. |
+
 ## Gaps and triage
 
 Add one row for each `FAIL` or unexpected behaviour found during the walkthrough.

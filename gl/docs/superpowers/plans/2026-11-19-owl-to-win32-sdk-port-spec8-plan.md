@@ -2,7 +2,7 @@
 
 **Spec reference:** `gl/docs/superpowers/specs/2026-11-19-owl-to-win32-sdk-port-spec8-design.md`
 **Date:** 2026-11-19
-**Plan status:** In progress (S8-M0 to M6 built; M6's removals wait for the acceptance)
+**Plan status:** Built (S8-M0 to M7); waiting for the acceptance walkthrough and sign-off (M7 task 2), then M6's removals
 
 **Paths:** relative to the repository root. The shell today is `gl/port/ManilaGL.{h,cpp}` on `win32fx/include/MdiFrame.h`, with the menu, toolbar and status bar from `gl/res/gl.rc` (made by `gl/res/tools/prune_rc.py`) and `win32fx/include/Toolbar.h` / `StatusBar.h`. Screens are `MainDialog` subclasses in `gl/port/`. New framework code goes in `win32fx/` (`Workspace`, `Page`, `Layout`, the controls), the command table in `gl/port/Commands.{h,cpp}`, pages in `gl/port/pages/`, and page templates in `gl/res/port.rc` with their IDs in `gl/port/PortIds.h`.
 
@@ -694,6 +694,30 @@ S is less than a day, M is 1–3 days, L is 3–6 days. **Parallel work:** M2, M
 ---
 
 ## Milestone 7 — Acceptance
+
+> **As built (2026-11-19).** Task 1 is done; task 2 is the finance team's.
+> - **The sheet:** `gl/docs/superpowers/specs/2026-11-19-spec8-acceptance.md`, in the Spec #7 sheet's shape: run details, P1 to P3 (`/checkaccess` and `/screenshots` added to P2), the fixture, spec §15's eleven criteria, gaps and triage, and sign-off.
+> - **Known gaps (G1 to G9):**
+>   - the options panels and the designer as a page (M5);
+>   - the gallery's missing Export and Import of report definitions;
+>   - the screens that are still dialogs;
+>   - M6's removals, waiting for sign-off;
+>   - no progress within a one-transaction task;
+>   - the 150% set by hand;
+>   - no Print on the GL voucher page, and File > Print with no preview still opening the old list;
+>   - the Create Cheques task can't choose the pay date or the bank, and the receipts page can't reverse a receipt.
+> - **The redesign notes:** the Spec #1 to #7 sheets each have a "Redesign (Spec #8)" section before their gaps, a table of each step whose screen moved and where it's done now. Their figures and checks are unchanged (the sections only add lines). Messages that read differently on the pages are quoted.
+> - **The figures:** `gl_tests/test_acceptance8.cpp` ("The Spec #8 acceptance walkthrough's figures") runs the sheet's moved steps in order on one fixture copy, through the page models, and checks every figure the sheet quotes:
+>   - the home page's before and after;
+>   - C004 saved and changed with no question;
+>   - voucher 104 typed through the grid's keys, saved and posted (5 `gl_dist` rows);
+>   - the refused account and closed period;
+>   - Post GL vouchers posting 2, with 102 unchecked ("Out of balance by 10.00.");
+>   - sales voucher 7 and its 1,000.00 receipt;
+>   - Update AR and AP making GL vouchers 105 and 106.
+>
+>   `gl_tests` 216.
+> - **Still to do (task 2):** the Release build check on the test machine, the walkthrough with a witness, triage of what it finds, and sign-off. Then M6 task 4 removes the classic screens.
 
 1. **`gl/docs/superpowers/specs/2026-11-19-spec8-acceptance.md`**, in the Spec #7 sheet's shape, with spec §15's checks. Each of the Spec #1–#7 sheets gets a "redesign" column for the steps whose screens moved, saying where the step is now done; the expected figures don't change. A `gl_tests` case runs the moved steps through the page models and checks every figure.
 2. Release build check, the finance team's walkthrough with a witness, triage, sign-off.

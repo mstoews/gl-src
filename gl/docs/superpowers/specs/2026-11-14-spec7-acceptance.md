@@ -187,6 +187,36 @@ Log in as `ADMIN`. **Reporting > Custom Report** lists the built-in reports, the
 | G8 | High DPI and real printers aren't tested; the Linux ASan/UBSan build hasn't been run for Spec #7. | As in the earlier sheets. | |
 | G9 | **Nothing has run against the deployed company.** Opening Custom Report or the designer there creates `GL_RPTDEF` and adds the `ACCESSM` row, and every existing level gets the right (its code doesn't reach the new row). | The plan forbids it before go-live is agreed. | A go-live step: back up, open Custom Report, then turn the right off for the levels that shouldn't design. |
 
+## Redesign (Spec #8)
+
+The figures and checks above stay as they are. Spec #8 moved some screens into pages in the main window; this table says where each step whose screen moved is done in the redesigned program. Until Spec #8's acceptance, the old dialog of each moved screen is still in the navigation pane as a "(classic)" entry (here **Reporting > Custom Report (classic)**), so each step can be done either way.
+
+The Report Designer, the calculation dialog, the questions, the preview (with its **Options...** and **Export...**) and the login did not move.
+
+| Criterion and step | Where it's done now | What differs |
+|---|---|---|
+| The criteria (opening line) | **Reporting > Custom Report** opens the report gallery page. | Favourites and Recent come first (when not searching), then the built-in reports grouped by their menu, then "User reports" with each one's description and maker. A search box narrows the list. |
+| 1, first step (**Add...**) | Gallery, **New report**. | The same designer opens. |
+| 1, last step (**Close**: the list shows it) | Gallery, under "User reports". | The maker (ADMIN) is shown in the report's row. |
+| 2, first step (**Modify...**) | Gallery, select the report, **Modify**. | None. |
+| 2, third and fifth steps (**Print**) | Gallery, **Open** (or double-click the report). | None: the questions, then the preview in a tab. |
+| 3, first step (**Add...**) | Gallery, **New report**. | None. |
+| 3, second step (**Print**) | Gallery, **Open**. | None. |
+| 4, first step (**Add...**) | Gallery, **New report**. | None. |
+| 5, first step (**Print** *GL lines by account*) | Gallery, **Open**. | None. |
+| 5, second step (**Modify...**) | Gallery, **Modify**. | None. |
+| 6, first step (**Copy...**) | Gallery, **Copy**. | None. |
+| 6, second step (**Delete**) | Gallery, **Delete**. | A task dialog asks "Delete the report “Copy of Sales by product (made)”?" ("It can't be undone."); the buttons are **Delete report** and **Keep it**, not **Yes**. |
+| 6, third step (Trial Balance) | Gallery, select **Trial Balance**. | **Modify**, **Copy** and **Delete** are greyed on a built-in report instead of explaining. The messages quoted are in **Custom Report (classic)**. |
+| 7, first step (**Export...** the definition) | **Custom Report (classic)**. | The gallery has no **Export...** button. |
+| 7, second step (**Print**, then the preview's **Export...**) | Gallery, **Open**. | None. |
+| 7, fourth and last steps (**Import...**) | **Custom Report (classic)**. | The gallery has no **Import...** button. |
+| 7, fifth step (**Print**) | Gallery, **Open**. | None. |
+| 8, first step (`CLERK`'s buttons) | Gallery. | **New report**, **Modify**, **Copy** and **Delete** are greyed; **Open** isn't. Import and Export are checked in **Custom Report (classic)**. |
+| 8, second step (**Print**) | Gallery, **Open**. | None. |
+| 8, third step (`ADMIN`'s buttons; User Access) | Gallery; **Maintenance > User Access** is now a page. | In the gallery, **Modify**, **Copy** and **Delete** are available only with a user report selected. On the User Access page, select `CLERK`: level B's commands are check boxes grouped by menu, and "Report Writer (design reports)" is unticked (off). Leave without **Save** in place of **Cancel**. |
+| 9, first step (**Import...** `old.gldef`) | **Custom Report (classic)** for the import; gallery **Modify** and **Open** for the rest. | The designer's "(missing)" message and the preview's note are the same. |
+
 ## Gaps and triage
 
 Every `FAIL` above gets a line here.

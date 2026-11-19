@@ -256,6 +256,17 @@ Run these on the test machine, logged in as `ADMIN`. Every report opens with its
 | G5 | The Linux ASan/UBSan build of the Spec #3 sources hasn't been run since S3-M1. | No Linux machine in this round. | Run `tools/linux/build_tests.sh --run`. |
 | G6 | ~~#8 is blocked.~~ | S3-M4 is built (2026-11-11). | None. |
 
+## Redesign (Spec #8)
+
+The figures and checks above stay as they are. Spec #8 moved some screens onto pages in one window (`2026-11-19-owl-to-win32-sdk-port-spec8-design.md`, §15 criterion 2); this table says where each step whose screen moved is done in the redesigned program. Until Spec #8's acceptance, the old dialog of each moved screen is still reachable as a "(classic)" entry in the navigation pane, so the step can be done either way.
+
+| Criterion and step | Where it's done now | What differs |
+|---|---|---|
+| 8, last step (clerk) | Compare Statement Layout with the Chart of Accounts page's command (menu and navigation pane). | Chart of Accounts opens a page, not a dialog. Statement Layout is still a dialog. |
+| 9, step 2 (Year End Consolidation) | The Year End Consolidation task page: its action button, then **Yes** in the task dialog. | It runs in the background with progress. The result line, not a message box, gives the amount taken to retained earnings, the **27** lines archived and the **1** voucher closed; 340000's new balance (−18,290.00) is checked by the next steps. |
+| 10, Voucher Entry's Print | General Ledger Voucher (classic) only. | The GL voucher page has no Print; a voucher's slip also prints from **Voucher Slips**. |
+| 11, step 3 (Custom Report, and right-click > Custom Report) | The report gallery page. | Reports are grouped by menu, then user reports, with search, favourites and recent, instead of the 1022 list. A report still opens its options dialog, then its preview, now in a tab. **File > Print** with no preview active still opens dialog 1022 (step 2 is unchanged). |
+
 ## Gaps and triage
 
 Add one row for each `FAIL` or unexpected behaviour found during the walkthrough.
