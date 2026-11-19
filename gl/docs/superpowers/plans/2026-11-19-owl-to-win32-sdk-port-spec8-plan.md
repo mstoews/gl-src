@@ -731,6 +731,10 @@ S is less than a day, M is 1–3 days, L is 3–6 days. **Parallel work:** M2, M
 >     - Preview asks a report's questions; Save and Ctrl+S save; closing the tab asks to save; Esc doesn't close it.
 >     - A saved report tells the gallery (data group `kReports`), which lists it again.
 >   - **Classic:** Custom Report (classic) keeps the modal designer and questions.
+> - **G7:**
+>   - **Print slip** (`IDC_VP_PRINT`) on the GL voucher page shows the saved voucher's slip (`VoucherSlip`) in a preview tab, as Voucher Entry's Print did (spec #3 D7). A new or changed voucher is refused on the information bar.
+>   - File > Print and the toolbar's Print button with no preview active open the report gallery; dialog 1022 stays as Custom Report (classic).
+>   - Driven on a scratch copy: Print slip on a new voucher is refused; on voucher 102 it opens "General Ledger Batch Entry Slip" in a tab; File > Print with no preview opens the gallery. Debug and Release `/checkres`, `/checkaccess` and `/stress` 0; `gl_tests` 220.
 >   - **Checks:** `/stress` opens, refreshes and closes each options panel; `/checkres` loads the new templates. Driven on a scratch copy: F1, F2 (its refusal), F3, F4 and *GL lines by account*; and the designer page (a retitle followed in the preview, Save, Esc, Close asking to save, New).
 > - **Still to do (task 2):** the Release build check on the test machine, the walkthrough with a witness, triage of what it finds, and sign-off. Then M6 task 4 removes the classic screens.
 

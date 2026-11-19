@@ -24,6 +24,8 @@
 #include "../Globals.h"
 #include "../Ini.h"
 #include "../PortIds.h"
+#include "../reports/RunReport.h"        // G7: the slip's preview
+#include "../reports/VoucherReports.h"   // VoucherSlip
 #include "GlVoucherModel.h"
 #include "SubledgerModels.h"
 #include "TaskModels.h"   // data_group
@@ -139,7 +141,8 @@ std::vector<std::pair<int, unsigned>> with(std::vector<std::pair<int, unsigned>>
 }
 
 const std::vector<std::pair<int, unsigned>> kGlAnchors = with({
-    {IDC_VP_PREV, m::kTopLeft}, {IDC_VP_NEXT, m::kTopLeft}, {IDC_GLV_DATE, m::kTopLeft}, {IDC_GLV_PERIOD, m::kTopLeft},
+    {IDC_VP_PREV, m::kTopLeft}, {IDC_VP_NEXT, m::kTopLeft}, {IDC_VP_PRINT, m::kTopLeft}, {IDC_GLV_DATE, m::kTopLeft},
+    {IDC_GLV_PERIOD, m::kTopLeft},
     {IDC_GLV_CHEQUE, m::kTopLeft}, {IDC_GLV_DESC, m::kTopLeft}, {IDC_VP_GRID, m::kAll},
 });
 
@@ -476,9 +479,25 @@ protected:
             case IDC_VP_POST: Post(); return true;
             case IDC_VP_PREV: Move(-1); return true;
             case IDC_VP_NEXT: Move(1); return true;
+            case IDC_VP_PRINT: PrintSlip(); return true;
             default: break;
             }
         return EntryPage::OnFormCommand(id, code, ctl);
+    }
+
+    // G7 (Voucher Entry's Print, spec #3 D7): the saved voucher's slip, previewed in a tab.
+    void PrintSlip()
+    {
+        if (model_.isNew()) {
+            ShowInfo(fx::InfoKind::Information, L"Save the voucher first, then print its slip.");
+            return;
+        }
+        if (IsDirty()) {
+            ShowInfo(fx::InfoKind::Information, L"The slip prints the voucher as saved: save the changes first.");
+            return;
+        }
+        const long n = model_.number;
+        RunReport(*host(), {}, [n](const ReportContext& ctx) { return VoucherSlip(cb, ctx, n); });
     }
 
     bool OnShortcut(const MSG& msg) override

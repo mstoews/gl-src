@@ -422,7 +422,8 @@ bool ManilaGL::OnCommand(WORD id, WORD code, HWND ctl)
         return true;
     case ID_PRINT:                         // File > Print, the toolbar Print button (spec #3 D9)
         if (rpt::win32::PrintActivePreview(*this)) return true;
-        RunReportList();                   // no preview active: the report list (1022)
+        OpenReportGallery(*this);          // no preview active: the report gallery (spec #8 G7; 1022 is Custom Report (classic))
+        NoteRecentPage(CM_REPORT_LIST);
         return true;
     case CM_REPORT_LIST:                   // Reporting > Custom Report, GLSUB: the report gallery (spec #8 S8-M5)
         OpenReportGallery(*this);

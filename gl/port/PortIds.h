@@ -207,6 +207,7 @@
 #define IDC_VP_POST             22001   // a voucher page's Post
 #define IDC_VP_PREV             22002   // the previous voucher (Ctrl+PgUp)
 #define IDC_VP_NEXT             22003   // the next voucher (Ctrl+PgDn)
+#define IDC_VP_PRINT            22004   // the GL voucher page's Print slip (spec #8 G7)
 #define IDC_VP_STATE            22005   // the voucher's number and state
 #define IDC_VP_GHEADER          22006   // the header's group box
 #define IDC_VP_GRID             22010   // the entry grid

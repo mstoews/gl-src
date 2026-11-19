@@ -226,7 +226,7 @@ Known before the walkthrough:
 | G6 | `/screenshots` and `/checkres` run at the system scale only; the 150% set needs the display set to 150%. | Done by hand in #10. |
 | G8 | The Create Cheques task page dates the cheques today and draws on GL_SETAT's first bank; neither can be chosen, and Hold / Force stay in the classic dialog. Spec #5's #6 uses "Create Cheques (classic)" for its pay date and bank. | Fixed (S8-M7): "Pay on:", "Bank:" and "First cheque:" on the page; the check boxes hold, release and force. Spec #5's redesign table updated. |
 | G9 | The receipts page can't reverse a receipt; Spec #6's #6 uses "Clear Receipts (classic)". | Fixed (S8-M7): **Reverse last receipt**, dated by the page's Date. Spec #6's redesign table updated. |
-| G7 | The GL voucher page has no Print: a voucher's slip prints from "General Ledger Voucher (classic)" or Reporting > Voucher Slips (Spec #3's #10). File > Print with no preview active still opens the old report list (1022); only Custom Report opens the gallery. | To decide before the classic screens go. ____ |
+| G7 | The GL voucher page has no Print: a voucher's slip prints from "General Ledger Voucher (classic)" or Reporting > Voucher Slips (Spec #3's #10). File > Print with no preview active still opens the old report list (1022); only Custom Report opens the gallery. | Fixed (S8-M7): **Print slip** on the GL voucher page (a preview tab), and File > Print with no preview opens the gallery; 1022 stays as Custom Report (classic). The Spec #3 redesign table is updated. |
 
 Found in the walkthrough:
 
