@@ -94,6 +94,8 @@
     <ClInclude Include="port\pages\CustomersModel.h" />
     <ClInclude Include="port\pages\CustomersPage.h" />
     <ClInclude Include="port\pages\GlVoucherModel.h" />
+    <ClInclude Include="port\pages\HomeModels.h" />
+    <ClInclude Include="port\pages\HomePages.h" />
     <ClInclude Include="port\pages\RecordModel.h" />
     <ClInclude Include="port\pages\RecordModels.h" />
     <ClInclude Include="port\pages\RecordPage.h" />
@@ -170,6 +172,8 @@
     <ClCompile Include="port\pages\CustomersModel.cpp" />
     <ClCompile Include="port\pages\CustomersPage.cpp" />
     <ClCompile Include="port\pages\GlVoucherModel.cpp" />
+    <ClCompile Include="port\pages\HomeModels.cpp" />
+    <ClCompile Include="port\pages\HomePages.cpp" />
     <ClCompile Include="port\pages\RecordModel.cpp" />
     <ClCompile Include="port\pages\RecordModels.cpp" />
     <ClCompile Include="port\pages\RecordPages.cpp" />

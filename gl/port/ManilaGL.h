@@ -69,6 +69,7 @@ private:
     void RestoreState();
     void SaveState();
     void OnPinsChanged() override { SaveState(); }
+    bool OnFrameShortcut(const MSG& msg) override;   // Ctrl+K
     bool restored_ = false;
 
     fx::CommandBar toolbar_;

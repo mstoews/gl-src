@@ -18,6 +18,7 @@
 #include "pages/RecordPage.h"
 #include "pages/VoucherPages.h"
 #include "pages/TaskPages.h"
+#include "pages/HomePages.h"
 #include "DataChanged.h"
 #include "model/JobState.h"
 #include "Company.h"
@@ -240,16 +241,19 @@ bool ManilaGL::OnCommand(WORD id, WORD code, HWND ctl)
                   "the pages' commands (pages/RecordPages.cpp)");
     if (IsRecordPageCommand(id)) {
         OpenRecordPage(*this, id);
+        NoteRecentPage(id);
         return true;
     }
     // The voucher screens that are pages (spec #8 S8-M3); their dialogs are the classic commands below.
     if (IsVoucherPageCommand(id)) {
         OpenVoucherPage(*this, id);
+        NoteRecentPage(id);
         return true;
     }
     // The batch screens that are task pages (spec #8 S8-M4); their dialogs are the classic commands below.
     if (IsTaskPageCommand(id)) {
         OpenTaskPage(*this, id);
+        NoteRecentPage(id);
         return true;
     }
     switch (id) {
@@ -309,6 +313,7 @@ bool ManilaGL::OnCommand(WORD id, WORD code, HWND ctl)
         return true;
     case 4059:                             // TManilaGL::ARAddVendors (ID_AR_CUSTOMER): Accounts > Sales Customers: a page (spec #8 S8-M1)
         OpenCustomersPage(*this);
+        NoteRecentPage(id);
         return true;
     case CM_AR_CUSTOMERS_CLASSIC:          // the dialog (spec #6 S6-M1), until spec #8's acceptance (Q4)
         RunArCustomers(hwnd());
@@ -418,8 +423,18 @@ bool ManilaGL::OnCommand(WORD id, WORD code, HWND ctl)
         if (rpt::win32::PrintActivePreview(*this)) return true;
         RunReportList();                   // no preview active: the report list (1022)
         return true;
-    case CM_REPORT_LIST:                   // Reporting > Custom Report, GLSUB (D9; 3068 in the original)
+    case CM_REPORT_LIST:                   // Reporting > Custom Report, GLSUB: the report gallery (spec #8 S8-M5)
+        OpenReportGallery(*this);
+        NoteRecentPage(id);
+        return true;
+    case CM_REPORT_LIST_CLASSIC:           // the report list, dialog 1022 (D9; 3068 in the original)
         RunReportList();
+        return true;
+    case CM_HOME:                          // spec #8 5.5
+        OpenHomePage(*this);
+        return true;
+    case CM_COMMAND_SEARCH:                // Ctrl+K (spec #8 4)
+        ShowCommandSearch(*this, [this](WORD c) { return MayRun(c); });
         return true;
     case CM_STATEMENT_LAYOUT:              // Accounts > Statement Layout (spec #3 6.4)
         RunStatementLayout(hwnd());
@@ -582,6 +597,7 @@ void ManilaGL::OnPageAreaContextMenu(POINT screen)
 void ManilaGL::BuildNavigation()
 {
     ClearNavigation();
+    AddNavItem(TVI_ROOT, L"Home", CM_HOME);   // spec #8 5.5: first
     std::vector<HTREEITEM> open;   // open[d]: the group rows at depth d go into
     bool skipping = false;         // inside the Window menu
     HTREEITEM accounts = nullptr;
@@ -610,6 +626,8 @@ void ManilaGL::BuildNavigation()
     }
     // The classic dialog of a screen that became a page (spec #8 Q4): not on the menu.
     if (accounts) AddNavItem(accounts, L"Sales Customers (classic)", CM_AR_CUSTOMERS_CLASSIC);
+    const auto rp = parentOf.find(static_cast<WORD>(CM_REPORT_LIST));
+    if (rp != parentOf.end()) AddNavItem(rp->second, L"Custom Report (classic)", CM_REPORT_LIST_CLASSIC);
 }
 
 void ManilaGL::RestoreState()
@@ -628,6 +646,16 @@ void ManilaGL::RestoreState()
             }
         }
         if (const auto nav = GetUiState(cb, user, "navigation")) SetNavigationVisible(*nav != "0");
+        if (const auto recent = GetUiState(cb, user, "recent")) {   // spec #8 5.5: the home page's recent pages
+            std::vector<WORD> ids;
+            for (const char* p = recent->c_str(); *p;) {
+                const WORD id = static_cast<WORD>(std::strtol(p, const_cast<char**>(&p), 10));
+                if (*p == ',') ++p;
+                if (!id) break;
+                ids.push_back(id);
+            }
+            SetRecentPages(ids);
+        }
         WORD active = 0;
         if (const auto a = GetUiState(cb, user, "active")) active = static_cast<WORD>(std::atoi(a->c_str()));
         if (const auto pins = GetUiState(cb, user, "pins")) {
@@ -647,6 +675,7 @@ void ManilaGL::RestoreState()
                     ActivatePage(h);
             (void)activePage;
         }
+        if (pages().empty()) OpenHomePage(*this);   // spec #8 5.5, Q5: nothing pinned: the home page
     } catch (const std::exception&) {
         // The state is a convenience: a database without GL_UISTATE, or a
         // read-only one, opens as it always did.
@@ -670,11 +699,21 @@ void ManilaGL::SaveState()
         std::string pins;
         for (WORD id : PinnedCommands()) pins += (pins.empty() ? "" : ",") + std::to_string(id);
         SetUiState(cb, user, "pins", pins);
+        std::string recent;
+        for (WORD id : RecentPages()) recent += (recent.empty() ? "" : ",") + std::to_string(id);
+        SetUiState(cb, user, "recent", recent);
         const auto* page = dynamic_cast<fx::HostedPage*>(fx::Window::FromHandle(activePage()));
         SetUiState(cb, user, "active", page && page->commandId ? std::to_string(page->commandId) : std::string());
     } catch (const std::exception&) {
         // A read-only company: the state isn't kept, the program goes on.
     }
+}
+
+bool ManilaGL::OnFrameShortcut(const MSG& msg)
+{
+    if (msg.wParam != 'K') return false;   // Ctrl+K: command search (spec #8 4)
+    OnCommand(CM_COMMAND_SEARCH, 0, nullptr);
+    return true;
 }
 
 bool ManilaGL::MayRun(WORD id)

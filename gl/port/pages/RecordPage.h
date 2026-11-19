@@ -13,6 +13,7 @@
 #include "win32fx.h"
 
 #include <memory>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -57,6 +58,8 @@ constexpr int kPageFilter = 21000, kPageList = 21001, kPageCommands = 21002;
 // if the command isn't one of these pages.
 HWND OpenRecordPage(fx::PageHost& host, WORD command);
 bool IsRecordPageCommand(WORD command);
+// A record page shows the record with `key` (command search); false if it isn't one, or the record isn't on file.
+bool ShowRecord(HWND page, const std::string& key);
 
 // The commands that became pages, each with its classic dialog's command
 // (spec #8 Q4: the dialogs stay until the acceptance) and its name there.
