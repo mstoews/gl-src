@@ -600,121 +600,88 @@ void ManilaGL::OnPageAreaContextMenu(POINT screen)
 
 namespace {
 
-// A navigation row's icon (Segoe Fluent Icons / Segoe MDL2 Assets), from its title: the first
-// rule whose words the title holds. A row no rule names takes `fallback` (its group's icon for
-// a group's rows, a document otherwise).
-wchar_t NavGlyph(const std::wstring& title, bool group, wchar_t fallback)
+// Where a navigation row sits: its icons follow the area (spec #8 G7 follow-up, the
+// ui-ux-pro-max review): vouchers keep an icon per kind of voucher, every report has the
+// report icon, and the other commands have none (their group's icon carries them).
+enum class NavArea { Other, Vouchers, Reports };
+
+NavArea AreaOf(const std::wstring& topTitle)
 {
-    std::wstring t = title;
-    for (wchar_t& c : t) c = static_cast<wchar_t>(towlower(c));
-    auto has = [&t](const wchar_t* w) { return t.find(w) != std::wstring::npos; };
-    if (group) {
-        static const struct { const wchar_t* words; wchar_t glyph; } kGroups[] = {
-            {L"file", 0xE8B7},                  // Folder
-            {L"fixed assets", 0xE7B8},          // Package
-            {L"accounts payable", 0xE7BF},      // ShoppingCart: vendors
-            {L"accounts receivable", 0xE716},   // People: customers
-            {L"accounts", 0xE8F1},              // Library: the ledger's books
-            {L"voucher reports", 0xE9F9},       // ReportDocument
-            {L"cancel voucher", 0xE711},        // Cancel
-            {L"post voucher", 0xE724},          // Send
-            {L"transactions", 0xE8AB},          // Switch
-            {L"receipts/payments", 0xE8C7},     // PaymentCard
-            {L"general ledger", 0xE82D},        // Dictionary (a bound book)
-            {L"financial statements", 0xEB05},  // PieSingle
-            {L"reporting", 0xE9D2},             // AreaChart
-            {L"maintenance", 0xE90F},           // Repair
-            {L"help", 0xE897},                  // Help
-        };
-        for (const auto& g : kGroups)
-            if (has(g.words)) return g.glyph;
-        return fallback ? fallback : 0xE8B7;
-    }
-    static const struct { const wchar_t* words; wchar_t glyph; } kRows[] = {
-        {L"(classic)", 0xE81C},           // History: the old dialog
-        {L"home", 0xE80F},                // Home
-        {L"printer setup", 0xE713},       // Setting
-        {L"print", 0xE749},               // Print
-        {L"exit", 0xE7E8},                // PowerButton
-        {L"company profile", 0xE731},     // Contact card
-        {L"calculator", 0xE8EF},          // Calculator
-        {L"recover", 0xE7A7},             // Undo
-        {L"restore", 0xE777},             // UpdateRestore
-        {L"backup", 0xE74E},              // Save
-        {L"reindex", 0xE895},             // Sync
-        {L"user access", 0xE8D7},         // Permissions
-        {L"purge", 0xE74D},               // Delete
-        {L"year end", 0xE787},            // Calendar
-        {L"prior period", 0xE787},        // Calendar
-        {L"update ar", 0xE72C},           // Refresh
-        {L"external", 0xE8B5},            // Import
-        {L"bank", 0xE825},                // Bank
-        {L"confirm", 0xE73E},             // CheckMark
-        {L"clear receipts", 0xE73E},      // CheckMark
-        {L"cheque", 0xE8C7},              // PaymentCard
-        {L"pre-payment", 0xE8C7},         // PaymentCard
-        {L"inquiry", 0xE721},             // Search
-        {L"layout", 0xE8A9},              // ViewAll
-        {L"trial balance", 0xE9D5},       // CheckList
-        {L"aged", 0xE916},                // Stopwatch
-        {L"forecast", 0xE9D2},            // AreaChart
-        {L"requirement", 0xE9D2},         // AreaChart
-        {L"vat", 0xE8EF},                 // Calculator
-        {L"tax", 0xE8EF},                 // Calculator
-        {L"budget data", 0xE8EF},         // Calculator
-        {L"balance sheet", 0xEB05},       // PieSingle
-        {L"income", 0xE9D2},              // AreaChart
-        {L"cash flow", 0xE9D2},           // AreaChart
-        {L"custom report", 0xE9F9},       // ReportDocument
-        {L"report", 0xE9F9},              // ReportDocument
-        {L"journal", 0xE82D},             // Dictionary
-        {L"register", 0xE82D},            // Dictionary
-        {L"chart of accounts", 0xEA37},   // List
-        {L"list", 0xEA37},                // List
-        {L"summary", 0xE9D2},             // AreaChart
-        {L"statement", 0xE8A5},           // Document
-        {L"department", 0xE821},          // Work (a briefcase)
-        {L"medical", 0xE77B},             // Contact
-        {L"doctor", 0xE95E},              // Health
-        {L"product", 0xE7B8},             // Package
-        {L"customer", 0xE716},            // People
-        {L"receiv", 0xE716},              // People
-        {L"receipt", 0xE716},             // People
-        {L"vendor", 0xE7BF},              // ShoppingCart
-        {L"vender", 0xE7BF},              // ShoppingCart (the menu's spelling)
-        {L"payable", 0xE7BF},             // ShoppingCart
-        {L"purchase", 0xE7BF},            // ShoppingCart
-        {L"sales", 0xE719},               // Shop
-        {L"cash", 0xE8C7},                // PaymentCard
-        {L"add/modify", 0xE70F},          // Edit
-        {L"disposal", 0xE74D},            // Delete
-        {L"type", 0xE8EC},                // Tag
-        {L"create voucher", 0xE710},      // Add
-        {L"general ledger", 0xE8A5},      // Document: the GL voucher
-        {L"slip", 0xE8A5},                // Document
-        {L"detail", 0xE8A5},              // Document
-        {L"status", 0xE9D5},              // CheckList
-        {L"listing", 0xEA37},             // List
-        {L"using help", 0xE897},          // Help
-        {L"about", 0xE946},               // Info
-    };
-    if (t == L"new") return 0xE710;    // Add
-    if (t == L"open") return 0xE8E5;   // OpenFile (not "Open Payables Detail")
-    for (const auto& r : kRows)
-        if (has(r.words)) return r.glyph;
-    return fallback ? fallback : 0xE8A5;   // Document
+    if (topTitle == L"Transactions") return NavArea::Vouchers;
+    if (topTitle == L"Reporting") return NavArea::Reports;
+    return NavArea::Other;
 }
+
+std::wstring Lower(const std::wstring& s)
+{
+    std::wstring t = s;
+    for (wchar_t& c : t) c = static_cast<wchar_t>(towlower(c));
+    return t;
+}
+
+// A group's icon (Segoe Fluent Icons / Segoe MDL2 Assets): every group and sub-group has one.
+wchar_t GroupGlyph(const std::wstring& title)
+{
+    const std::wstring t = Lower(title);
+    static const struct { const wchar_t* words; wchar_t glyph; } kGroups[] = {
+        {L"file", 0xE8B7},                  // Folder
+        {L"fixed assets", 0xE7B8},          // Package
+        {L"accounts payable", 0xE7BF},      // ShoppingCart: vendors
+        {L"accounts receivable", 0xE716},   // People: customers
+        {L"accounts", 0xE8F1},              // Library: the ledger's books
+        {L"voucher reports", 0xE9F9},       // ReportDocument
+        {L"cancel voucher", 0xE733},        // Blocked (not Cancel's X, which reads as "close")
+        {L"post voucher", 0xE930},          // Completed (not Send's paper plane, which reads as "email")
+        {L"transactions", 0xE8AB},          // Switch
+        {L"receipts/payments", 0xE825},     // Bank
+        {L"general ledger", 0xE82D},        // Dictionary (a bound book)
+        {L"financial statements", 0xEB05},  // PieSingle
+        {L"reporting", 0xE9D2},             // AreaChart (its reports have the report icon)
+        {L"maintenance", 0xE90F},           // Repair
+        {L"help", 0xE897},                  // Help
+    };
+    for (const auto& g : kGroups)
+        if (t.find(g.words) != std::wstring::npos) return g.glyph;
+    return 0xE8B7;   // Folder
+}
+
+// A command's icon, or 0 for none. `title` without its " (classic)": a classic dialog has
+// the icon of the screen it stands for.
+wchar_t CommandGlyph(const std::wstring& title, NavArea area)
+{
+    const std::wstring t = Lower(title);
+    auto has = [&t](const wchar_t* w) { return t.find(w) != std::wstring::npos; };
+    if (t == L"home") return 0xE80F;         // Home
+    if (t == L"exit") return 0xE7E8;         // PowerButton
+    if (t == L"using help") return 0xE897;   // Help
+    if (t == L"about") return 0xE946;        // Info
+    // Every report the same (ReportDocument), wherever it's listed.
+    if (area == NavArea::Reports || has(L"report") || has(L"inquiry")) return 0xE9F9;
+    if (area == NavArea::Vouchers) {   // one icon per kind of voucher, the same in Cancel and Post
+        if (has(L"recover")) return 0xE7A7;                              // Undo
+        if (has(L"voucher list")) return 0xEA37;                         // List
+        if (has(L"general ledger") || has(L"prior period")) return 0xE8A5;   // Document: a GL voucher
+        if (has(L"purchase")) return 0xE7BF;                             // ShoppingCart
+        if (has(L"cash")) return 0xE8C7;                                 // PaymentCard
+        if (has(L"sales")) return 0xE719;                                // Shop
+    }
+    return 0;
+}
+
+constexpr const wchar_t* kClassicSuffix = L" (classic)";
 
 } // namespace
 
 void ManilaGL::BuildNavigation()
 {
     ClearNavigation();
-    AddNavItem(TVI_ROOT, L"Home", CM_HOME, false, NavGlyph(L"Home", false, 0));   // spec #8 5.5: first
+    AddNavItem(TVI_ROOT, L"Home", CM_HOME, false, CommandGlyph(L"Home", NavArea::Other));   // spec #8 5.5: first
     std::vector<HTREEITEM> open;   // open[d]: the group rows at depth d go into
     bool skipping = false;         // inside the Window menu
     HTREEITEM accounts = nullptr;
-    std::map<WORD, HTREEITEM> parentOf;   // a command's group: its classic dialog goes beside it
+    NavArea area = NavArea::Other;           // the area of the top-level group being filled
+    std::map<HTREEITEM, NavArea> areaOf;     // each group's area: its classic dialogs' icons follow it
+    std::map<WORD, HTREEITEM> parentOf;      // a command's group: its classic dialog goes beside it
     for (const cmd::MenuRow& r : cmd::MenuRows()) {
         if (r.depth == 0) skipping = r.kind == cmd::Kind::Popup && cmd::PlainText(r.text) == L"Window";
         if (skipping || r.kind == cmd::Kind::Separator) continue;
@@ -722,15 +689,22 @@ void ManilaGL::BuildNavigation()
         HTREEITEM parent = open.empty() ? TVI_ROOT : open.back();
         const std::wstring text = cmd::PlainText(r.text);
         if (r.kind == cmd::Kind::Popup) {
-            open.push_back(AddNavItem(parent, text, 0, false, NavGlyph(text, true, 0)));
+            if (r.depth == 0) area = AreaOf(text);
+            open.push_back(AddNavItem(parent, text, 0, false, GroupGlyph(text)));
+            areaOf[open.back()] = area;
             if (r.depth == 0 && text == L"Accounts") accounts = open.back();
         } else {
-            AddNavItem(parent, text, r.id, false, NavGlyph(text, false, 0));
+            AddNavItem(parent, text, r.id, false, CommandGlyph(text, r.depth == 0 ? NavArea::Other : area));
             if (!parentOf.count(static_cast<WORD>(r.id))) parentOf[static_cast<WORD>(r.id)] = parent;
         }
     }
-    auto classic = [this](HTREEITEM parent, const std::wstring& text, WORD id) {
-        AddNavItem(parent, text, id, false, NavGlyph(text, false, 0));
+    // A classic dialog: its screen's icon, and " (classic)" in grey (not a clock on every one).
+    auto classic = [this, &areaOf](HTREEITEM parent, const std::wstring& text, WORD id) {
+        const size_t at = text.rfind(kClassicSuffix);
+        const std::wstring base = at == std::wstring::npos ? text : text.substr(0, at);
+        const auto a = areaOf.find(parent);
+        AddNavItem(parent, text, id, false, CommandGlyph(base, a == areaOf.end() ? NavArea::Other : a->second),
+                   at == std::wstring::npos ? std::wstring::npos : at + 1);
     };
     std::vector<ClassicCommand> classics = ClassicCommands();
     const std::vector<ClassicCommand>& vouchers = VoucherClassicCommands();
