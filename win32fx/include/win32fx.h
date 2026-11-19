@@ -16,6 +16,7 @@
 #include "Dock.h"
 #include "MdiFrame.h"
 #include "MessageLoop.h"
+#include "Accessibility.h"
 #include "Ask.h"
 #include "DateField.h"
 #include "EntryGrid.h"

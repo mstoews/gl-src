@@ -363,6 +363,41 @@ protected:
     bool OnDestroy() override { return true; }   // not the main window
 };
 
+// Spec #8 S8-M6, 12: a page's controls as a screen reader and the keyboard
+// meet them. Every focusable control has a name (after the page's own naming,
+// fx::NameUnnamedControls); Tab reaches every one; within a group, Tab goes in
+// reading order (top to bottom, then left to right); every push button has an
+// access key.
+void checkAccess(HWND form, int id, const std::wstring& what, Report& r)
+{
+    auto ids = [](const std::vector<HWND>& v) {
+        std::wstring s;
+        for (HWND h : v) s += L" " + std::to_wstring(GetDlgCtrlID(h));
+        return s;
+    };
+    const std::vector<HWND> unnamed = fx::UnnamedControls(form);   // the page has named its own
+    r.check(unnamed.empty(), fx::Format(L"page %d, %s: every control has an accessible name%s", id, what.c_str(),
+                                        unnamed.empty() ? L"" : (L" (unnamed:" + ids(unnamed) + L")").c_str()));
+    const std::vector<HWND> unreachable = fx::UnreachableControls(form);
+    r.check(unreachable.empty(), fx::Format(L"page %d, %s: Tab reaches every control%s", id, what.c_str(),
+                                            unreachable.empty() ? L"" : (L" (not:" + ids(unreachable) + L")").c_str()));
+    const auto order = fx::TabOrderProblems(form);
+    std::wstring pairs;
+    for (const auto& [a, b] : order) pairs += fx::Format(L" %d->%d", GetDlgCtrlID(a), GetDlgCtrlID(b));
+    r.check(order.empty(), fx::Format(L"page %d, %s: Tab follows reading order within each group%s", id, what.c_str(),
+                                      order.empty() ? L"" : (L" (out of order:" + pairs + L")").c_str()));
+    std::vector<HWND> noKey;
+    for (HWND c = GetWindow(form, GW_CHILD); c; c = GetWindow(c, GW_HWNDNEXT)) {
+        wchar_t cls[16] = {};
+        GetClassNameW(c, cls, 16);
+        const LONG t = GetWindowLongW(c, GWL_STYLE) & BS_TYPEMASK;
+        if (_wcsicmp(cls, L"Button") != 0 || (t != BS_PUSHBUTTON && t != BS_DEFPUSHBUTTON)) continue;
+        if (fx::GetDlgItemString(form, GetDlgCtrlID(c)).find(L'&') == std::wstring::npos) noKey.push_back(c);
+    }
+    r.check(noKey.empty(), fx::Format(L"page %d, %s: every button has an access key%s", id, what.c_str(),
+                                      noKey.empty() ? L"" : (L" (none:" + ids(noKey) + L")").c_str()));
+}
+
 // Spec #8 S8-M1: each page's form loads as a child, its captions fit, and
 // every control has an anchor.
 void checkPages(HINSTANCE inst, Report& r)
@@ -618,6 +653,61 @@ bool SaveWindowPng(HWND wnd, const std::wstring& path)
     return ok;
 }
 
+// The pages, by the command that opens each (spec #8 S8-M6): /checkaccess and /screenshots.
+std::vector<WORD> pageCommands()
+{
+    std::vector<WORD> v = {CM_HOME, CM_REPORT_LIST, 4059, CM_VOUCHER_LIST};
+    for (const ClassicCommand& c : ClassicCommands()) v.push_back(c.page);
+    for (const ClassicCommand& c : VoucherClassicCommands()) v.push_back(c.page);
+    for (const ClassicCommand& c : TaskClassicCommands()) v.push_back(c.page);
+    return v;
+}
+
+HWND openPage(fx::PageHost& host, WORD c)
+{
+    if (c == CM_HOME) return OpenHomePage(host);
+    if (c == CM_REPORT_LIST) return OpenReportGallery(host);
+    if (c == 4059) return OpenCustomersPage(host);
+    if (IsRecordPageCommand(c)) return OpenRecordPage(host, c);
+    if (IsVoucherPageCommand(c)) return OpenVoucherPage(host, c);
+    if (IsTaskPageCommand(c)) return OpenTaskPage(host, c);
+    return nullptr;
+}
+
+int RunAccessCheck(HINSTANCE inst, bool quiet)
+{
+    class CheckHost : public fx::Workspace {
+    protected:
+        bool OnDestroy() override { return true; }   // not the main window
+    };
+    Report r;
+    CheckHost w;
+    if (!w.CreateWorkspace(inst, L"GLAccessCheck", L"access check", nullptr, -1)) {
+        r.check(false, L"workspace: created");
+    } else {
+        for (WORD c : pageCommands()) {
+            HWND h = openPage(w, c);
+            auto* page = dynamic_cast<fx::Page*>(fx::Window::FromHandle(h));
+            if (!page || !page->form()) {
+                r.check(false, fx::Format(L"command %u: its page opens", c));
+                continue;
+            }
+            const std::wstring what = page->title();
+            int dlgId = 0;
+            (void)dlgId;
+            checkAccess(page->form(), c, what, r);
+            w.ClosePage(h);
+        }
+        DestroyWindow(w.hwnd());
+    }
+    if (!quiet) {
+        if (r.failures) r.log += fx::Format(L"\n%d check(s) FAILED", r.failures);
+        else r.log += L"\nAll checks passed.";
+        MessageBoxW(nullptr, r.log.c_str(), L"gl.exe access check", r.failures ? MB_ICONERROR : MB_ICONINFORMATION);
+    }
+    return r.failures;
+}
+
 int SaveScreenshots(HINSTANCE inst, HWND frame, const std::wstring& dir, bool quiet)
 {
     const HRESULT init = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
@@ -644,6 +734,18 @@ int SaveScreenshots(HINSTANCE inst, HWND frame, const std::wstring& dir, bool qu
         ShowWindow(dlg, SW_SHOWNOACTIVATE);
         r.check(SaveWindowPng(dlg, file(std::to_wstring(d.id))), fx::Format(L"dialog %d, %s", d.id, d.what));
         DestroyWindow(dlg);
+    }
+    if (auto* w = dynamic_cast<fx::Workspace*>(fx::Window::FromHandle(frame))) {   // spec #8 S8-M6: the pages
+        for (WORD c : pageCommands()) {
+            HWND h = openPage(*w, c);
+            if (!h) {
+                r.check(false, fx::Format(L"page of command %u: not opened", c));
+                continue;
+            }
+            RedrawWindow(frame, nullptr, nullptr, RDW_INVALIDATE | RDW_UPDATENOW | RDW_ALLCHILDREN);
+            r.check(SaveWindowPng(frame, file(fx::Format(L"page-%u", c))), fx::Format(L"page of command %u", c));
+            w->ClosePage(h);
+        }
     }
     if (SUCCEEDED(init)) CoUninitialize();
 

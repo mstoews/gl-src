@@ -153,6 +153,7 @@ bool CustomersPage::OnInitPage()
 {
     SetAnchors(kAnchors);
     list_ = Item(IDC_PGC_LIST);
+    fx::SetAccessibleName(list_, L"Customers list");   // spec #8 12
     open_ = Item(IDC_PGC_OPEN);
     const int dpi = static_cast<int>(GetDpiForWindow(form()));
     for (HWND l : {list_, open_}) {

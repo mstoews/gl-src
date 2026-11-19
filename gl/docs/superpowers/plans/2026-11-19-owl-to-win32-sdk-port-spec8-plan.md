@@ -2,7 +2,7 @@
 
 **Spec reference:** `gl/docs/superpowers/specs/2026-11-19-owl-to-win32-sdk-port-spec8-design.md`
 **Date:** 2026-11-19
-**Plan status:** In progress (S8-M0 to M5 built)
+**Plan status:** In progress (S8-M0 to M6 built; M6's removals wait for the acceptance)
 
 **Paths:** relative to the repository root. The shell today is `gl/port/ManilaGL.{h,cpp}` on `win32fx/include/MdiFrame.h`, with the menu, toolbar and status bar from `gl/res/gl.rc` (made by `gl/res/tools/prune_rc.py`) and `win32fx/include/Toolbar.h` / `StatusBar.h`. Screens are `MainDialog` subclasses in `gl/port/`. New framework code goes in `win32fx/` (`Workspace`, `Page`, `Layout`, the controls), the command table in `gl/port/Commands.{h,cpp}`, pages in `gl/port/pages/`, and page templates in `gl/res/port.rc` with their IDs in `gl/port/PortIds.h`.
 
@@ -633,6 +633,36 @@ S is less than a day, M is 1–3 days, L is 3–6 days. **Parallel work:** M2, M
 ---
 
 ## Milestone 6 — Polish, accessibility, and removing the old
+
+> **As built (2026-11-19; built and run on Windows 11, VS 18, v145).**
+> - **Windows 11 touches** (task 1, `win32fx/include/Accessibility.h` `ApplyFrameLook`; the decision is the portable `model::ChooseFrameLook`):
+>   - **Mica** (`DWMWA_SYSTEMBACKDROP_TYPE`, main window) on build 22621 and later, unless high contrast is on or transparency effects are off (the Personalize registry value Windows uses).
+>   - **The title bar** follows the apps' dark or light theme (`DWMWA_USE_IMMERSIVE_DARK_MODE`).
+>   - **Windows 10** (Q7) gets no backdrop attribute.
+>   - **Reapplied** on `WM_SETTINGCHANGE`, `WM_THEMECHANGED` and the colorization change.
+>   - The pages paint their own backgrounds, so Mica shows in the title bar.
+> - **Accessibility** (task 2):
+>   - **Names:** every page names every focusable control explicitly after its `OnInitPage` (`fx::NameUnnamedControls`), and clears the names when it closes. Both the MSAA name and UI Automation's Name property are set (Dynamic Annotation, `IAccPropServices`), because UIA's own Win32 proxies don't apply the label-before-control rule MSAA uses.
+>   - **Where names come from:** the label before the control; an edit's cue banner; "<field> dept" for an account's dept; the label on its left (the bank box); its group box; a list's first heading. The main lists get explicit names: "Departments list", "Voucher lines", "Open invoices", "Reports", "Post GL vouchers: what it acts on".
+>   - **Announcements:** the information bar raises a UI Automation notification (`UiaRaiseNotificationEvent`) as well as the live-region event.
+>   - **COM** is initialised on the UI thread (`OleInitialize` in `wWinMain`).
+> - **The checks** (tasks 2 and 3): `gl.exe /checkaccess [/quiet]` is new.
+>   - **What it does:** it opens the company, opens every page (37 of them) as the program shows it, and checks that every focusable control has an accessible name, Tab reaches every one, Tab follows reading order within each group, and every push button has an access key.
+>   - **Why not `/checkres`:** it runs before the company is open, and the pages' names, cue banners and lists are set at run time, so a bare template can't be judged.
+>   - **Fixed by the check:** the task page's action button had no access key; it now gets one ("&Post", "R&un").
+> - **Not done: removing the old** (task 4). The plan removes it only once each milestone's acceptance has passed (Q4, M7), and the classic entries are how the finance team compares old and new. So the dialogs, `MainDialog`, the old controls, `closeAll`, `MdiFrame` and the MANILA menu resource stay. The classic entries were never in command search.
+> - **Screenshots** (task 5): `/screenshots` now also opens every page in the frame and saves it (`page-<command>-<dpi>.png`): 37 pages beside the dialogs.
+>   - **One scale only:** the scale is the system's (96 DPI here). The 100 % and 150 % sets need the display set to each scale, as for the dialogs.
+> - **`/stress`:** with COM initialised, one USER object of OLE's or UI Automation's sometimes goes in the middle of a step. The step then read -1, the same as "could not run" (seen in Debug, a different step each run). `stressStep` now takes a negative reading again, as it already did for Windows' stray +1.
+> - **Tests:** `gl_tests` 215 (`test_frame.cpp`: when Mica and the dark title bar are used).
+> - **Checked:**
+>   - Debug and Release `/W4 /WX` clean; the suites pass in both; `/checkres` 0, `/checkaccess` 0 and `/stress` 0 in both (Debug's `/stress` twice).
+>   - **Names read from outside the program** through MSAA on live pages: "Filter by code or name", "Departments list", "Dept", "Description" on Departments; "AP", "AP dept", "VAT", "VAT dept", "Type" on Vendors; "Voucher lines", "Date", "Period", "Description" on the GL voucher; "Post" and the task's list on Post GL vouchers.
+>   - `/screenshots` saved the 37 pages; the home page's was looked at.
+> - **Not checked:**
+>   - Narrator itself. .NET's managed UI Automation client showed no names, but it uses its own client-side proxies, not the native ones Narrator uses.
+>   - Mica on screen.
+>   - 150 %.
 
 **Goal:** the redesign looks and reads like a current Windows program, and what it replaced is gone.
 

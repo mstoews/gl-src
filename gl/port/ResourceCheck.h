@@ -21,6 +21,13 @@
 // Returns the number of failures; the report goes to a message box unless quiet.
 int RunResourceCheck(HINSTANCE inst, bool quiet);
 
+// gl.exe /checkaccess (spec #8 S8-M6, 12): every page opened on the company, as
+// the program shows it, and checked: every focusable control has an accessible
+// name, Tab reaches every one, Tab follows reading order within each group, and
+// every push button has an access key. Returns the number of failures; without
+// `quiet`, lists them in a message box. Needs the company open (cb).
+int RunAccessCheck(HINSTANCE inst, bool quiet);
+
 // Returns the number of screenshots that failed; a summary goes to a message
 // box unless quiet. `frame` must be shown.
 int SaveScreenshots(HINSTANCE inst, HWND frame, const std::wstring& dir, bool quiet);

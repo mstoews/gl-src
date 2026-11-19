@@ -14,6 +14,9 @@
 //      PSW=T (TGlWindow::SetupWindow posted ID_SYSACCESS the same way).
 //
 //   gl.exe /checkres [/quiet]   loads every Spec #1 resource and reports
+//   gl.exe /checkaccess [/quiet]  opens every page on the company and checks
+//                               names, Tab reach, tab order and access keys
+//                               (spec #8 S8-M6; ResourceCheck.h)
 //   gl.exe /stress [/quiet]     opens and closes the Chart of Accounts 100
 //                               times (Add, Delete and Budget Data in turn),
 //                               each master-data screen 25 times, and Voucher
@@ -42,6 +45,7 @@
 //
 #include <Windows.h>
 #include <shellapi.h>   // CommandLineToArgvW
+#include <ole2.h>       // OleInitialize
 
 #pragma comment(lib, "shell32.lib")
 
@@ -131,12 +135,20 @@ int fail(const std::wstring& text)
 // process, never a GDI object and never more than +1; 2026-11-11), which
 // no warm-up can absorb. A leak in the step shows in both readings; that
 // object can appear in only one.
+//
+// The reverse happens too since spec #8 S8-M6 initialises COM on the UI thread
+// (OleInitialize, for the accessible names): one USER object of OLE's or UI
+// Automation's goes at a moment of its own, and a step reads -1 (seen in Debug,
+// in a different step each run; 2026-11-19), which is also the "could not run"
+// value. So a negative reading is taken again: a step that couldn't run reads
+// -1 again, one that lost Windows' object reads 0.
 template <typename Step>
 int stressStep(Step step)
 {
     const int first = step();
-    if (first <= 0) return first;
+    if (first == 0) return 0;
     const int second = step();
+    if (first < 0) return second;
     return second < 0 ? second : (std::min)(first, second);
 }
 
@@ -149,6 +161,8 @@ int WINAPI wWinMain(_In_ HINSTANCE inst, _In_opt_ HINSTANCE, _In_ LPWSTR cmdLine
     _CrtSetDbgFlag(_CrtSetDbgFlag(_CRTDBG_REPORT_FLAG) | _CRTDBG_ALLOC_MEM_DF | _CRTDBG_LEAK_CHECK_DF);
 #endif
     if (!fx::RegisterCustomControls(inst)) return fail(L"The custom controls could not be registered.");
+    // COM on the UI thread (spec #8 12): accessible names (IAccPropServices) and UI Automation.
+    const HRESULT ole = OleInitialize(nullptr);
     const std::wstring args = cmdLine ? cmdLine : L"";
     if (args.find(L"/checkres") != std::wstring::npos)
         return RunResourceCheck(inst, args.find(L"/quiet") != std::wstring::npos);
@@ -165,6 +179,12 @@ int WINAPI wWinMain(_In_ HINSTANCE inst, _In_opt_ HINSTANCE, _In_ LPWSTR cmdLine
     if (const size_t at = args.find(L"/failpost"); at != std::wstring::npos)
         SetPostFault(static_cast<int>(std::wcstol(args.c_str() + at + 9, nullptr, 10)));   // "/failpost <n>"; 0: off
 
+    if (args.find(L"/checkaccess") != std::wstring::npos) {   // spec #8 S8-M6: the pages as shown
+        const int failures = RunAccessCheck(inst, args.find(L"/quiet") != std::wstring::npos);
+        cb.close();
+        if (SUCCEEDED(ole)) OleUninitialize();
+        return failures;
+    }
     if (args.find(L"/stress") != std::wstring::npos) {
         const int accounts = stressStep([] { return StressChartOfAccounts(100); });
         const int master = stressStep([] { return StressMasterData(25); });
@@ -234,5 +254,6 @@ int WINAPI wWinMain(_In_ HINSTANCE inst, _In_opt_ HINSTANCE, _In_ LPWSTR cmdLine
         }
     }
     cb.close();
+    if (SUCCEEDED(ole)) OleUninitialize();
     return rc;
 }

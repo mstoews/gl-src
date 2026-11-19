@@ -216,6 +216,7 @@ bool RecordPage::OnInitPage()
 {
     SetAnchors(d_.anchors);
     list_ = Item(kPageList);
+    fx::SetAccessibleName(list_, std::wstring(d_.title) + L" list");   // spec #8 12
     const int dpi = static_cast<int>(GetDpiForWindow(form()));
     SetWindowTheme(list_, L"Explorer", nullptr);
     ListView_SetExtendedListViewStyle(list_, LVS_EX_FULLROWSELECT | LVS_EX_DOUBLEBUFFER);

@@ -3,6 +3,8 @@
 //
 #include "InfoBar.h"
 
+#include "Accessibility.h"
+
 #include <CommCtrl.h>
 
 #pragma comment(lib, "comctl32.lib")
@@ -68,6 +70,7 @@ void InfoBar::Show(InfoKind kind, const std::wstring& text)
     ShowWindow(hwnd_, SW_SHOWNA);
     InvalidateRect(hwnd_, nullptr, TRUE);
     NotifyWinEvent(EVENT_OBJECT_LIVEREGIONCHANGED, hwnd_, OBJID_CLIENT, CHILDID_SELF);
+    Announce(hwnd_, text);   // spec #8 12: a UI Automation notification, read at once
 }
 
 void InfoBar::Hide()

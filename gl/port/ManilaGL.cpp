@@ -182,6 +182,7 @@ bool ManilaGL::OnCreate(LPCREATESTRUCTW cs)
     }
     RefreshStatus();
     SetDataChangedFrame(hwnd());   // spec #8 9.3: the pages and jobs tell the frame what changed
+    fx::ApplyFrameLook(hwnd());    // spec #8 11: Mica and the title bar's theme
     RefreshWaiting();
     return true;
 }
@@ -545,6 +546,8 @@ bool ManilaGL::OnMessage(UINT msg, WPARAM wp, LPARAM lp, LRESULT& result)
         result = 0;
         return true;
     }
+    if (msg == WM_SETTINGCHANGE || msg == WM_THEMECHANGED || msg == WM_DWMCOLORIZATIONCOLORCHANGED)
+        fx::ApplyFrameLook(hwnd());   // the theme, transparency or high contrast changed
     if (msg == kDataChanged) {   // spec #8 9.3: a save or a job changed the books, or a job started
         RefreshWaiting();
         ApplyRights();             // writing commands off while a job holds the books
