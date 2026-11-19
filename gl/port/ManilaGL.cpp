@@ -17,6 +17,9 @@
 #include "pages/CustomersPage.h"
 #include "pages/RecordPage.h"
 #include "pages/VoucherPages.h"
+#include "pages/TaskPages.h"
+#include "DataChanged.h"
+#include "model/JobState.h"
 #include "Company.h"
 #include "ChartOfAccounts.h"
 #include "FixedAssetTypes.h"
@@ -177,6 +180,8 @@ bool ManilaGL::OnCreate(LPCREATESTRUCTW cs)
         PostMessageW(hwnd(), kRestoreState, 0, 0);   // after wWinMain shows the window
     }
     RefreshStatus();
+    SetDataChangedFrame(hwnd());   // spec #8 9.3: the pages and jobs tell the frame what changed
+    RefreshWaiting();
     return true;
 }
 
@@ -225,6 +230,8 @@ bool ManilaGL::OnCommand(WORD id, WORD code, HWND ctl)
     // A command the rights deny doesn't run, wherever it came from (a key, the toolbar).
     if (!ctl && id != ID_SYSACCESS && !MayRun(id)) {
         MessageBeep(MB_OK);
+        if (IsWritingCommand(id) && fx::model::JobGate::Busy())   // spec #8 9.2: why it's off
+            SetStatus(ID_MENUHELP, fx::Utf8ToWide(fx::model::JobGate::Holder()) + L" is writing to the books: wait for it to finish.");
         return true;
     }
     // The master screens that are pages (spec #8 S8-M2); their dialogs are the classic commands below.
@@ -238,6 +245,11 @@ bool ManilaGL::OnCommand(WORD id, WORD code, HWND ctl)
     // The voucher screens that are pages (spec #8 S8-M3); their dialogs are the classic commands below.
     if (IsVoucherPageCommand(id)) {
         OpenVoucherPage(*this, id);
+        return true;
+    }
+    // The batch screens that are task pages (spec #8 S8-M4); their dialogs are the classic commands below.
+    if (IsTaskPageCommand(id)) {
+        OpenTaskPage(*this, id);
         return true;
     }
     switch (id) {
@@ -280,7 +292,7 @@ bool ManilaGL::OnCommand(WORD id, WORD code, HWND ctl)
     case CM_ASSETS_CLASSIC:                // TManilaGL::GLFixedAdd (ID_FAADD): Fixed Assets > Add/Modify
         RunFixedAssets(hwnd());
         return true;
-    case ID_FASLIP:                        // TManilaGL::GLFixedSlip: Fixed Assets > Create Voucher
+    case CM_TK_DEPRECIATION_CLASSIC:       // (ID_FASLIP) TManilaGL::GLFixedSlip: Fixed Assets > Create Voucher
         RunCreateDepreciationVoucher(hwnd());
         return true;
     case ID_DISPOSAL:                      // TManilaGL::GLFixedDisposal: Fixed Assets > Disposal
@@ -313,46 +325,46 @@ bool ManilaGL::OnCommand(WORD id, WORD code, HWND ctl)
     case 6085:                             // TManilaGL::APPayment: Bank Reconciliation (S5-M6)
         RunApBankReconciliation(hwnd());
         return true;
-    case 1066:                             // TManilaGL::APPurgeAccts: Maintenance > Purge Paid Payables (S5-M6)
+    case CM_TK_PURGEAP_CLASSIC:            // (1066) TManilaGL::APPurgeAccts: Maintenance > Purge Paid Payables (S5-M6)
         RunApPurge(hwnd());
         return true;
-    case 1057:                             // TManilaGL::APCreateGLSlip: Receipts/Payments > Create Cheques (S5-M5)
+    case CM_TK_CHEQUES_CLASSIC:            // (1057) TManilaGL::APCreateGLSlip: Receipts/Payments > Create Cheques (S5-M5)
         RunApCreateCheques(hwnd());
         return true;
     case CM_APCASH_CLASSIC:                // (1079) TManilaGL::APCash: Transactions > Cash Invoice Vouchers, toolbar (S5-M4)
         RunApCashEntry(hwnd());
         return true;
-    case 1088:                             // TManilaGL::APPostCash: Post Voucher > Cash Vouchers (S5-M4)
+    case CM_TK_POSTCASH_CLASSIC:           // (1088) TManilaGL::APPostCash: Post Voucher > Cash Vouchers (S5-M4)
         RunApPost(hwnd(), ApKind::Cash);
         return true;
-    case 1085:                             // TManilaGL::APCancelCash: Cancel Voucher > Cash Invoice Vouchers (S5-M4)
+    case CM_TK_CANCELCASH_CLASSIC:         // (1085) TManilaGL::APCancelCash: Cancel Voucher > Cash Invoice Vouchers (S5-M4)
         RunApCancel(hwnd(), ApKind::Cash);
         return true;
-    case 1048:                             // TManilaGL::APPostBatch: Post Voucher > Purchase Vouchers (S5-M3)
+    case CM_TK_POSTAP_CLASSIC:             // (1048) TManilaGL::APPostBatch: Post Voucher > Purchase Vouchers (S5-M3)
         RunApPost(hwnd(), ApKind::Invoice);
         return true;
-    case 3064:                             // TManilaGL::APCancelBatch: Cancel Voucher > Purchase Vouchers (S5-M3)
+    case CM_TK_CANCELAP_CLASSIC:           // (3064) TManilaGL::APCancelBatch: Cancel Voucher > Purchase Vouchers (S5-M3)
         RunApCancel(hwnd(), ApKind::Invoice);
         return true;
-    case CM_AP_RECOVER:                    // Transactions > Recover Purchase Voucher (spec #5 D7, S5-M3)
+    case CM_TK_RECOVERAP_CLASSIC:          // (CM_AP_RECOVER) Transactions > Recover Purchase Voucher (spec #5 D7, S5-M3)
         RunApRecover(hwnd(), ApKind::Invoice);
         return true;
-    case 4049:                             // TManilaGL::ARPostBatch (ID_ARPOST): Post Voucher > Sales Voucher (spec #6 S6-M3)
+    case CM_TK_POSTAR_CLASSIC:             // (4049) TManilaGL::ARPostBatch (ID_ARPOST): Post Voucher > Sales Voucher (spec #6 S6-M3)
         RunArPost(hwnd());
         return true;
-    case 4053:                             // TManilaGL::ARCancelBatch (ID_ARCANCEL): Cancel Voucher > Sales Invoice Voucher (S6-M3)
+    case CM_TK_CANCELAR_CLASSIC:           // (4053) TManilaGL::ARCancelBatch (ID_ARCANCEL): Cancel Voucher > Sales Invoice Voucher (S6-M3)
         RunArCancel(hwnd());
         return true;
-    case CM_AR_RECOVER:                    // Transactions > Recover Sales Voucher (spec #6 D7, S6-M3)
+    case CM_TK_RECOVERAR_CLASSIC:          // (CM_AR_RECOVER) Transactions > Recover Sales Voucher (spec #6 D7, S6-M3)
         RunArRecover(hwnd());
         return true;
     case CM_RECEIPTS_CLASSIC:              // (4054) TManilaGL::ARCreateSlip (ID_ARPAYMENT): Clear Receipts (spec #6 S6-M4)
         RunArReceipts(hwnd());
         return true;
-    case 4062:                             // TManilaGL::ARPurgeAccts (ID_ARPURGE): Maintenance > Purge Received Receivables (S6-M5)
+    case CM_TK_PURGEAR_CLASSIC:            // (4062) TManilaGL::ARPurgeAccts (ID_ARPURGE): Maintenance > Purge Received Receivables (S6-M5)
         RunArPurge(hwnd());
         return true;
-    case 1028:                             // TGlWindow::GLUpdateAP: Maintenance > Update AR and AP (S5-M3)
+    case CM_TK_TRANSFER_CLASSIC:           // (1028) TGlWindow::GLUpdateAP: Maintenance > Update AR and AP (S5-M3)
         RunApTransfer(hwnd());
         return true;
     case CM_GLVOUCHER_CLASSIC:             // TGlWindow::GLModifyBatch / GLBatchEnt (ID_MODBATCH, ID_BATCHENT): the dialog
@@ -367,10 +379,10 @@ bool ManilaGL::OnCommand(WORD id, WORD code, HWND ctl)
     case ID_ACCTBUDGET:                    // TGlWindow::GLAcctBudget: Budget Data
         RunBudgetData(hwnd());
         return true;
-    case ID_YEAREND:                       // TGlWindow::GLYearEnd: Year End Consolidation
+    case CM_TK_YEAREND_CLASSIC:            // (ID_YEAREND) TGlWindow::GLYearEnd: Year End Consolidation
         RunYearEnd(hwnd());
         return true;
-    case ID_BACKUP:                        // TGlWindow::GLBackup: Backup Databases
+    case CM_TK_BACKUP_CLASSIC:             // (ID_BACKUP) TGlWindow::GLBackup: Backup Databases
         RunBackup(hwnd());
         return true;
     case ID_RESTORE:                       // TGlWindow::GLRestore: Restore Databases
@@ -383,13 +395,13 @@ bool ManilaGL::OnCommand(WORD id, WORD code, HWND ctl)
     case ID_REINDEX:                       // TGlWindow::GLReindex: Reindex Databases
         RunReindex(hwnd());
         return true;
-    case ID_GLPOSTBATCH:                   // TGlWindow::GLPostBatch: Post Voucher > General Ledger, GLSUB, toolbar
+    case CM_TK_POSTGL_CLASSIC:             // (ID_GLPOSTBATCH) TGlWindow::GLPostBatch: Post Voucher > General Ledger, GLSUB, toolbar
         RunPostVouchers(hwnd());
         return true;
-    case ID_GLREPBATCH:                    // TGlWindow::GLRepBatch: Recover General Ledger Voucher
+    case CM_TK_RECOVERGL_CLASSIC:          // (ID_GLREPBATCH) TGlWindow::GLRepBatch: Recover General Ledger Voucher
         RunRecoverVoucher(hwnd());
         return true;
-    case ID_BATCHDELETE:                   // TGlWindow::GLDeleteBatch: Cancel Voucher > General Ledger
+    case CM_TK_CANCELGL_CLASSIC:           // (ID_BATCHDELETE) TGlWindow::GLDeleteBatch: Cancel Voucher > General Ledger
         RunCancelVoucher(hwnd());
         return true;
     case ID_ABOUT: {                       // TGlWindow::CMAbout
@@ -518,6 +530,12 @@ bool ManilaGL::OnMessage(UINT msg, WPARAM wp, LPARAM lp, LRESULT& result)
         result = 0;
         return true;
     }
+    if (msg == kDataChanged) {   // spec #8 9.3: a save or a job changed the books, or a job started
+        RefreshWaiting();
+        ApplyRights();             // writing commands off while a job holds the books
+        result = 0;
+        return true;
+    }
     if (Workspace::OnMessage(msg, wp, lp, result)) return true;   // tabs, navigation, the Window menu's pages
     switch (msg) {
     case WM_INITMENUPOPUP:   // TManilaGL::WMInitMenuPopup: the rights, as ApplyMenuAccess and its follow-ons did
@@ -584,6 +602,8 @@ void ManilaGL::BuildNavigation()
     std::vector<ClassicCommand> classics = ClassicCommands();
     const std::vector<ClassicCommand>& vouchers = VoucherClassicCommands();
     classics.insert(classics.end(), vouchers.begin(), vouchers.end());
+    const std::vector<ClassicCommand>& tasks = TaskClassicCommands();
+    classics.insert(classics.end(), tasks.begin(), tasks.end());
     for (const ClassicCommand& c : classics) {
         const auto p = parentOf.find(c.page);
         if (p != parentOf.end()) AddNavItem(p->second, c.text, c.classic);
@@ -660,7 +680,32 @@ void ManilaGL::SaveState()
 bool ManilaGL::MayRun(WORD id)
 {
     if (!rights_) rights_ = cmd::Rights::Load(cb);
+    if (IsWritingCommand(id) && fx::model::JobGate::Busy()) return false;   // spec #8 9.2: one writing job
     return rights_->MayRun(id, szMsg);
+}
+
+void ManilaGL::RefreshWaiting()
+{
+    // Spec #8 9.3: what is waiting, in the status bar's middle part; the job writing, if any.
+    auto count = [](const char* sql) {
+        try {
+            cb4sqlite::Query q(cb, sql);
+            return q.next() ? std::atoi(q.text(0).c_str()) : 0;
+        } catch (const std::exception&) {
+            return 0;
+        }
+    };
+    const int gl = count("SELECT count(*) FROM gl_btch WHERE _deleted = 0 AND trim(mode) IN ('1', '3')");
+    const int ap = count("SELECT count(*) FROM ap_btch WHERE _deleted = 0 AND trim(mode) = '1'") +
+                   count("SELECT count(*) FROM ap_cash WHERE _deleted = 0 AND trim(mode) = '1'");
+    const int ar = count("SELECT count(*) FROM ar_btch WHERE _deleted = 0 AND trim(mode) = '1'");
+    const int journal = count("SELECT count(*) FROM ap_jsum WHERE _deleted = 0 AND trim(coalesce(mode, '')) IN ('', '1')") +
+                        count("SELECT count(*) FROM ar_jsum WHERE _deleted = 0 AND trim(coalesce(mode, '')) IN ('', '1')");
+    std::wstring text = L"To post: " + std::to_wstring(gl) + L" GL, " + std::to_wstring(ap) + L" AP, " + std::to_wstring(ar) +
+                        L" AR vouchers; " + std::to_wstring(journal) + L" journal rows to transfer.";
+    const std::string holder = fx::model::JobGate::Holder();
+    if (!holder.empty()) text = fx::Utf8ToWide(holder) + L" is writing to the books.  " + text;
+    SetStatus(ID_MENUHELP, text);
 }
 
 bool ManilaGL::IsCommandEnabled(WORD id) const

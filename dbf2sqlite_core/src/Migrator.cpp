@@ -442,6 +442,7 @@ Result migrate(const Options& opt)
                 throw Fatal{ExitCode::DestWrite, "cannot create " + pathUtf8(tmp)};
             for (const SourceFile& sf : sources)
                 translateOk = migrateTable(code, sf, files, opt, r) && translateOk;
+            code.useRollbackJournal();   // a one-shot tool's output: one file (spec #8 D8)
         }
 
         if (translateOk) {
@@ -455,6 +456,7 @@ Result migrate(const Options& opt)
                     throw Fatal{ExitCode::Verify, t.table + ": expected " + std::to_string(t.rows) +
                                                       " rows, read back " + std::to_string(d.isValid() ? d.recCount() : -1)};
             }
+            code.useRollbackJournal();   // reopening set WAL again
         }
     } catch (const Fatal& f) {
         r.code = f.code;

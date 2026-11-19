@@ -34,7 +34,8 @@ int Code4::open(const char* utf8Path, bool create)
     }
     db_ = db;
     try {
-        detail::exec(db_, "PRAGMA foreign_keys = ON; PRAGMA journal_mode = DELETE;", "Code4::open");
+        sqlite3_busy_timeout(db_, kBusyTimeoutMs);
+        detail::exec(db_, "PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL;", "Code4::open");
         ensureMetaTables(*this);
     } catch (...) {
         close();
@@ -163,6 +164,18 @@ bool Code4::checkDatabase(const char* utf8Path, const std::vector<std::string>& 
     return true;
 }
 
+void Code4::useRollbackJournal()
+{
+    if (db_) detail::exec(db_, "PRAGMA journal_mode = DELETE;", "Code4::useRollbackJournal");
+}
+
+bool Code4::checkpoint()
+{
+    if (!db_) return false;
+    int log = 0, done = 0;
+    return sqlite3_wal_checkpoint_v2(db_, nullptr, SQLITE_CHECKPOINT_TRUNCATE, &log, &done) == SQLITE_OK && log == done;
+}
+
 void Code4::backupTo(const char* utf8Path)
 {
     static const char* M = "Code4::backupTo";
@@ -170,6 +183,7 @@ void Code4::backupTo(const char* utf8Path)
     if (inTransaction_) throw Error(M, "a transaction is open");
     if (!utf8Path || !*utf8Path) throw Error(M, "no file name");
     for (Data4* d : std::vector<Data4*>(open_)) d->flush();
+    checkpoint();   // spec #8 D8: best effort; the backup copies the WAL's pages either way
 
     namespace fs = std::filesystem;
     const auto u8 = [](const std::string& s) { return fs::path(std::u8string(s.begin(), s.end())); };
@@ -189,6 +203,9 @@ void Code4::backupTo(const char* utf8Path)
         if (rc == SQLITE_DONE) rc = frc;
     }
     std::string msg = (rc == SQLITE_OK || rc == SQLITE_DONE) ? std::string() : sqlite3_errmsg(dst);
+    // The copy is one file: rollback journal mode, so no -wal side file holds part of it.
+    if (msg.empty() && sqlite3_exec(dst, "PRAGMA journal_mode = DELETE;", nullptr, nullptr, nullptr) != SQLITE_OK)
+        msg = sqlite3_errmsg(dst);
     if (sqlite3_close(dst) != SQLITE_OK && msg.empty()) msg = "close failed";
     if (msg.empty()) {
         fs::rename(u8(part), u8(utf8Path), ec);   // replaces an existing file (MoveFileExW on Windows)

@@ -20,11 +20,13 @@
 #include "VoucherPages.h"
 
 #include "../Accounts.h"   // TrimText
+#include "../DataChanged.h"
 #include "../Globals.h"
 #include "../Ini.h"
 #include "../PortIds.h"
 #include "GlVoucherModel.h"
 #include "SubledgerModels.h"
+#include "TaskModels.h"   // data_group
 
 #include <CommCtrl.h>
 #include <Uxtheme.h>
@@ -221,10 +223,14 @@ protected:
     }
 
     // A refusal: the field marked, or the grid's cell made current.
+    // The tables a save, post or delete on this page changes (spec #8 9.3).
+    virtual unsigned Groups() const = 0;
+
     void ShowResult(const EntryResult& r)
     {
         if (r.ok) {
             ShowInfo(fx::InfoKind::Success, wide(r.message));
+            NotifyDataChanged(Groups(), hwnd());
             return;
         }
         if (!r.field.empty()) {
@@ -324,8 +330,11 @@ public:
         SetPageTitle(model_.isNew() ? kind : kind + L" - " + std::to_wstring(model_.number));
     }
 
+    unsigned Groups() const override { return data_group::kGlVouchers | data_group::kGlBalances | data_group::kReports; }
+
     bool Save() override
     {
+        if (SaveWaitsForJob(*this)) return false;   // spec #8 9.1, R5
         if (!CommitGrid()) return false;
         ReadHeader();
         const EntryResult r = model_.Save();
@@ -482,6 +491,22 @@ protected:
     bool OnMessage(UINT msg, WPARAM wp, LPARAM lp, LRESULT& result) override
     {
         if (msg == WM_DESTROY) gGlPages.erase(std::remove(gGlPages.begin(), gGlPages.end(), hwnd()), gGlPages.end());
+        if (msg == kDataChanged) {   // spec #8 9.3: a job or another page changed the vouchers
+            if ((wp & data_group::kGlVouchers) && reinterpret_cast<HWND>(lp) != hwnd() && !model_.isNew()) {
+                const long n = model_.number;
+                if (!IsDirty()) {
+                    if (!Goto(n)) {   // posted or cancelled meanwhile: Goto said so in the bar
+                        model_.New(today());
+                        Fill();
+                    }
+                } else {
+                    ShowInfo(fx::InfoKind::Warning, L"Voucher " + std::to_wstring(n) + L" may have changed since you opened it. "
+                                                    L"Save keeps your changes.");
+                }
+            }
+            result = 0;
+            return true;
+        }
         return EntryPage::OnMessage(msg, wp, lp, result);
     }
 
@@ -551,8 +576,11 @@ public:
         commandId = kind == ApKind::Cash ? 1079 : 4044;
     }
 
+    unsigned Groups() const override { return data_group::kAp | data_group::kReports; }
+
     bool Save() override
     {
+        if (SaveWaitsForJob(*this)) return false;   // spec #8 9.1, R5
         if (!CommitGrid()) return false;
         ReadHeader();
         const EntryResult r = model_.Save();
@@ -805,8 +833,11 @@ class ArInvoicePage : public EntryPage {
 public:
     ArInvoicePage() : EntryPage(IDD_PG_ARINVOICE), model_(cb) { commandId = 5045; }
 
+    unsigned Groups() const override { return data_group::kAr | data_group::kReports; }
+
     bool Save() override
     {
+        if (SaveWaitsForJob(*this)) return false;   // spec #8 9.1, R5
         if (!CommitGrid()) return false;
         ReadHeader();
         const EntryResult r = model_.Save();
@@ -1114,7 +1145,7 @@ protected:
 
     bool OnMessage(UINT msg, WPARAM wp, LPARAM lp, LRESULT& result) override
     {
-        if (shownNow(msg, wp, lp) && list_) {   // back to the tab: the invoices posted meanwhile
+        if ((shownNow(msg, wp, lp) || (msg == kDataChanged && (wp & data_group::kAr))) && list_) {   // back to the tab, or the books changed
             model_.Load(Checked(IDC_RCP_ALL));
             ShowList();
             ShowSelected();
@@ -1177,6 +1208,7 @@ private:
         ShowList();
         ShowSelected();
         ShowInfo(fx::InfoKind::Success, wide(r.message));
+        NotifyDataChanged(data_group::kAr, hwnd());   // spec #8 9.3
     }
 
     ReceiptsModel model_;
@@ -1272,7 +1304,7 @@ protected:
 
     bool OnMessage(UINT msg, WPARAM wp, LPARAM lp, LRESULT& result) override
     {
-        if (shownNow(msg, wp, lp) && list_) Reload();   // back to the tab: the vouchers saved meanwhile
+        if ((shownNow(msg, wp, lp) || (msg == kDataChanged && (wp & data_group::kGlVouchers))) && list_) Reload();   // the tab back, or a change
         return fx::Page::OnMessage(msg, wp, lp, result);
     }
 

@@ -16,6 +16,8 @@
 #include "CustomersPage.h"
 
 #include "../Accounts.h"   // TrimText
+#include "../DataChanged.h"
+#include "TaskModels.h"   // data_group
 #include "../Globals.h"
 #include "../PortIds.h"
 #include "CustomersModel.h"
@@ -290,6 +292,7 @@ void CustomersPage::Read()
 
 bool CustomersPage::Save()
 {
+    if (SaveWaitsForJob(*this)) return false;
     Read();
     bool ok = true;
     for (const TextField& t : kText) ok = Validate(t.id) && ok;
@@ -308,6 +311,7 @@ bool CustomersPage::Save()
     Fill();
     ShowList();
     ShowInfo(fx::InfoKind::Success, wide(r.message));
+    NotifyDataChanged(data_group::kMasters | data_group::kAr, hwnd());   // spec #8 9.3
     return true;
 }
 

@@ -19,6 +19,7 @@
 #include "Ask.h"
 #include "DateField.h"
 #include "EntryGrid.h"
+#include "Job.h"
 #include "InfoBar.h"
 #include "Layout.h"
 #include "Lookup.h"
