@@ -64,8 +64,12 @@ public:
     // ---- the navigation pane ----
     HWND navigation() const noexcept { return nav_; }
     void ClearNavigation();
-    // An item under `parent` (TVI_ROOT for the top). id 0: a group.
-    HTREEITEM AddNavItem(HTREEITEM parent, const std::wstring& text, WORD id, bool expanded = false);
+    // An item under `parent` (TVI_ROOT for the top). id 0: a group. `glyph` is
+    // its icon, a character of the system icon font (Segoe Fluent Icons, or
+    // Segoe MDL2 Assets before Windows 11); 0: none. A group's icon is drawn in
+    // the accent colour, a command's in the text colour.
+    HTREEITEM AddNavItem(HTREEITEM parent, const std::wstring& text, WORD id, bool expanded = false,
+                         wchar_t glyph = 0);
     void SetNavigationVisible(bool visible);
     bool navigationVisible() const noexcept { return navVisible_; }
     // Redraw the pane (after the rights change, say).
@@ -133,6 +137,15 @@ private:
     LRESULT NavCustomDraw(NMTVCUSTOMDRAW* cd) const;
     void SetUiFont();
     int scaled(int px96) const;
+    // The navigation icons: built again at a new DPI.
+    int navImage(wchar_t glyph, bool group);
+    void BuildNavImages();
+    struct NavIcon {
+        wchar_t glyph;
+        bool group;
+    };
+    HIMAGELIST navImages_ = nullptr;
+    std::vector<NavIcon> navGlyphs_;   // navGlyphs_[i] is image i
 
     HINSTANCE inst_ = nullptr;
     HWND nav_ = nullptr;

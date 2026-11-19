@@ -29,6 +29,73 @@ constexpr WORD kTabClose = 1, kTabCloseOthers = 2, kTabPin = 3;
 
 Workspace* gKeyWorkspace = nullptr;   // the workspace whose keys the message loop filters
 
+constexpr int kNavIcon96 = 16;
+constexpr COLORREF kNavAccent = RGB(0, 95, 184);   // the Windows 11 accent blue (the home page's links)
+
+// The system icon font at `px`: Segoe Fluent Icons (Windows 11), else Segoe MDL2 Assets.
+HFONT iconFont(int px)
+{
+    for (const wchar_t* face : {L"Segoe Fluent Icons", L"Segoe MDL2 Assets"}) {
+        HFONT f = CreateFontW(-px, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS,
+                              CLIP_DEFAULT_PRECIS, ANTIALIASED_QUALITY, DEFAULT_PITCH, face);
+        if (!f) continue;
+        HDC dc = CreateCompatibleDC(nullptr);
+        HGDIOBJ old = SelectObject(dc, f);
+        wchar_t got[LF_FACESIZE] = {};
+        GetTextFaceW(dc, LF_FACESIZE, got);
+        SelectObject(dc, old);
+        DeleteDC(dc);
+        if (_wcsicmp(got, face) == 0) return f;
+        DeleteObject(f);
+    }
+    return nullptr;
+}
+
+// `glyph` drawn in `color` on a transparent px x px icon (alpha from the glyph's coverage).
+HICON glyphIcon(HFONT font, wchar_t glyph, int px, COLORREF color)
+{
+    BITMAPINFO bi{};
+    bi.bmiHeader.biSize = sizeof bi.bmiHeader;
+    bi.bmiHeader.biWidth = px;
+    bi.bmiHeader.biHeight = -px;
+    bi.bmiHeader.biPlanes = 1;
+    bi.bmiHeader.biBitCount = 32;
+    bi.bmiHeader.biCompression = BI_RGB;
+    void* bits = nullptr;
+    HDC dc = CreateCompatibleDC(nullptr);
+    HBITMAP color32 = CreateDIBSection(dc, &bi, DIB_RGB_COLORS, &bits, nullptr, 0);
+    if (!color32 || !bits) {
+        DeleteDC(dc);
+        return nullptr;
+    }
+    HGDIOBJ oldBmp = SelectObject(dc, color32);
+    HGDIOBJ oldFont = SelectObject(dc, font);
+    RECT rc{0, 0, px, px};
+    FillRect(dc, &rc, static_cast<HBRUSH>(GetStockObject(WHITE_BRUSH)));
+    SetBkMode(dc, TRANSPARENT);
+    SetTextColor(dc, RGB(0, 0, 0));
+    DrawTextW(dc, &glyph, 1, &rc, DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
+    GdiFlush();
+    SelectObject(dc, oldFont);
+    SelectObject(dc, oldBmp);
+    DeleteDC(dc);
+    // Black on white: the coverage is 255 less the brightness. Straight alpha, as an icon's.
+    auto* p = static_cast<DWORD*>(bits);
+    const DWORD rgb = static_cast<DWORD>(GetRValue(color)) << 16 | static_cast<DWORD>(GetGValue(color)) << 8 |
+                      GetBValue(color);
+    for (int i = 0; i < px * px; ++i) {
+        const DWORD cover = 255 - (p[i] & 0xFF);
+        p[i] = cover ? (cover << 24 | rgb) : 0;
+    }
+    std::vector<BYTE> zeros(static_cast<size_t>(((px + 15) / 16) * 2 * px), 0);
+    HBITMAP mask = CreateBitmap(px, px, 1, 1, zeros.data());
+    ICONINFO ii{TRUE, 0, 0, mask, color32};
+    HICON icon = CreateIconIndirect(&ii);
+    DeleteObject(mask);
+    DeleteObject(color32);
+    return icon;
+}
+
 bool ctrlDown() { return (GetKeyState(VK_CONTROL) & 0x8000) != 0; }
 bool shiftDown() { return (GetKeyState(VK_SHIFT) & 0x8000) != 0; }
 
@@ -41,6 +108,7 @@ Workspace::~Workspace()
         if (CurrentKeyFilter() == &Workspace::FilterKey) SetKeyFilter(nullptr);
     }
     if (uiFont_) DeleteObject(uiFont_);
+    if (navImages_) ImageList_Destroy(navImages_);
 }
 
 HWND Workspace::CreateWorkspace(HINSTANCE inst, const wchar_t* className, const wchar_t* title, HMENU menu,
@@ -75,13 +143,14 @@ void Workspace::SetUiFont()
 bool Workspace::OnCreate(LPCREATESTRUCTW)
 {
     nav_ = CreateWindowExW(0, WC_TREEVIEWW, L"Navigation",
-                           WS_CHILD | WS_VISIBLE | WS_TABSTOP | TVS_HASBUTTONS | TVS_SHOWSELALWAYS | TVS_FULLROWSELECT |
+                           // No expand buttons: each row has its icon (AddNavItem), a group's in the accent colour.
+                           WS_CHILD | WS_VISIBLE | WS_TABSTOP | TVS_SHOWSELALWAYS | TVS_FULLROWSELECT |
                                TVS_TRACKSELECT | TVS_SINGLEEXPAND,
                            0, 0, 0, 0, hwnd(), reinterpret_cast<HMENU>(static_cast<INT_PTR>(kNavId)), inst_, nullptr);
     if (nav_) {
         SetWindowTheme(nav_, L"Explorer", nullptr);
-        TreeView_SetExtendedStyle(nav_, TVS_EX_DOUBLEBUFFER | TVS_EX_FADEINOUTEXPANDOS,
-                                  TVS_EX_DOUBLEBUFFER | TVS_EX_FADEINOUTEXPANDOS);
+        TreeView_SetExtendedStyle(nav_, TVS_EX_DOUBLEBUFFER, TVS_EX_DOUBLEBUFFER);
+        TreeView_SetIndent(nav_, scaled(14));
     }
     tabs_ = CreateWindowExW(0, WC_TABCONTROLW, L"Pages", WS_CHILD | WS_CLIPSIBLINGS | TCS_FOCUSNEVER | TCS_TABS,
                             0, 0, 0, 0, hwnd(), reinterpret_cast<HMENU>(static_cast<INT_PTR>(kTabsId)), inst_, nullptr);
@@ -197,13 +266,58 @@ void Workspace::ClearNavigation()
     if (nav_) TreeView_DeleteAllItems(nav_);
 }
 
-HTREEITEM Workspace::AddNavItem(HTREEITEM parent, const std::wstring& text, WORD id, bool expanded)
+void Workspace::BuildNavImages()
+{
+    if (!nav_) return;
+    const int px = scaled(kNavIcon96);
+    HIMAGELIST images = ImageList_Create(px, px, ILC_COLOR32 | ILC_MASK, static_cast<int>(navGlyphs_.size()) + 8, 8);
+    if (!images) return;
+    HFONT font = iconFont(px);
+    for (const NavIcon& g : navGlyphs_) {
+        HICON icon = font ? glyphIcon(font, g.glyph, px, g.group ? kNavAccent : GetSysColor(COLOR_WINDOWTEXT)) : nullptr;
+        if (icon) {
+            ImageList_AddIcon(images, icon);
+            DestroyIcon(icon);
+        } else {
+            HICON blank = CreateIcon(nullptr, 1, 1, 1, 32, nullptr, nullptr);
+            ImageList_AddIcon(images, blank);   // keeps the indexes in step
+            if (blank) DestroyIcon(blank);
+        }
+    }
+    if (font) DeleteObject(font);
+    TreeView_SetImageList(nav_, images, TVSIL_NORMAL);
+    if (navImages_) ImageList_Destroy(navImages_);
+    navImages_ = images;
+}
+
+int Workspace::navImage(wchar_t glyph, bool group)
+{
+    for (size_t i = 0; i < navGlyphs_.size(); ++i)
+        if (navGlyphs_[i].glyph == glyph && navGlyphs_[i].group == group) return static_cast<int>(i);
+    navGlyphs_.push_back({glyph, group});
+    const int px = scaled(kNavIcon96);
+    if (!navImages_) {
+        BuildNavImages();
+    } else if (HFONT font = iconFont(px)) {
+        HICON icon = glyphIcon(font, glyph, px, group ? kNavAccent : GetSysColor(COLOR_WINDOWTEXT));
+        DeleteObject(font);
+        if (icon) {
+            ImageList_AddIcon(navImages_, icon);
+            DestroyIcon(icon);
+        }
+    }
+    const int index = static_cast<int>(navGlyphs_.size()) - 1;
+    return navImages_ && index < ImageList_GetImageCount(navImages_) ? index : I_IMAGENONE;
+}
+
+HTREEITEM Workspace::AddNavItem(HTREEITEM parent, const std::wstring& text, WORD id, bool expanded, wchar_t glyph)
 {
     if (!nav_) return nullptr;
     TVINSERTSTRUCTW ins{};
     ins.hParent = parent;
     ins.hInsertAfter = TVI_LAST;
-    ins.item.mask = TVIF_TEXT | TVIF_PARAM | TVIF_STATE;
+    ins.item.mask = TVIF_TEXT | TVIF_PARAM | TVIF_STATE | TVIF_IMAGE | TVIF_SELECTEDIMAGE;
+    ins.item.iImage = ins.item.iSelectedImage = glyph ? navImage(glyph, id == 0) : I_IMAGENONE;
     ins.item.pszText = const_cast<wchar_t*>(text.c_str());
     ins.item.lParam = id;
     ins.item.stateMask = TVIS_EXPANDED | TVIS_BOLD;
@@ -510,11 +624,24 @@ bool Workspace::OnMessage(UINT msg, WPARAM wp, LPARAM lp, LRESULT& result)
                 GetCursorPos(&hit.pt);
                 ScreenToClient(nav_, &hit.pt);
                 HTREEITEM item = TreeView_HitTest(nav_, &hit);
-                if (item && (hit.flags & (TVHT_ONITEM | TVHT_ONITEMRIGHT | TVHT_ONITEMINDENT))) {
-                    TreeView_SelectItem(nav_, item);
-                    RunNavItem(item);
-                }
                 result = 0;
+                if (item && (hit.flags & (TVHT_ONITEM | TVHT_ONITEMRIGHT | TVHT_ONITEMINDENT))) {
+                    const bool wasSelected = TreeView_GetSelection(nav_) == item;
+                    TVITEMW tv{};
+                    tv.mask = TVIF_PARAM;
+                    tv.hItem = item;
+                    const bool group = TreeView_GetItem(nav_, &tv) && tv.lParam == 0;
+                    TreeView_SelectItem(nav_, item);
+                    if (group) {
+                        // TVS_SINGLEEXPAND opens a group as it's selected (closing the others); a click
+                        // on the group already selected opens or closes it. Toggling after the select
+                        // closed it again, so the groups never seemed to open.
+                        TreeView_Expand(nav_, item, wasSelected ? TVE_TOGGLE : TVE_EXPAND);
+                    } else {
+                        RunNavItem(item);
+                    }
+                    result = 1;   // handled: the tree's own click handling would toggle it once more
+                }
                 return true;
             }
             case NM_RETURN:
@@ -571,6 +698,7 @@ LRESULT Workspace::DefaultProc(UINT msg, WPARAM wp, LPARAM lp)
     if (msg == WM_DPICHANGED) {   // per-monitor v2: moved to a monitor with another scaling
         OnDpiChanged(HIWORD(wp));
         SetUiFont();
+        if (navImages_) BuildNavImages();
         const RECT* r = reinterpret_cast<const RECT*>(lp);
         SetWindowPos(hwnd(), nullptr, r->left, r->top, r->right - r->left, r->bottom - r->top,
                      SWP_NOZORDER | SWP_NOACTIVATE);

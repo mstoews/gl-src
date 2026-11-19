@@ -598,10 +598,119 @@ void ManilaGL::OnPageAreaContextMenu(POINT screen)
 
 // ---- the command table: navigation and rights (spec #8 8) ------------------------------
 
+namespace {
+
+// A navigation row's icon (Segoe Fluent Icons / Segoe MDL2 Assets), from its title: the first
+// rule whose words the title holds. A row no rule names takes `fallback` (its group's icon for
+// a group's rows, a document otherwise).
+wchar_t NavGlyph(const std::wstring& title, bool group, wchar_t fallback)
+{
+    std::wstring t = title;
+    for (wchar_t& c : t) c = static_cast<wchar_t>(towlower(c));
+    auto has = [&t](const wchar_t* w) { return t.find(w) != std::wstring::npos; };
+    if (group) {
+        static const struct { const wchar_t* words; wchar_t glyph; } kGroups[] = {
+            {L"file", 0xE8B7},                  // Folder
+            {L"fixed assets", 0xE7B8},          // Package
+            {L"accounts payable", 0xE7BF},      // ShoppingCart: vendors
+            {L"accounts receivable", 0xE716},   // People: customers
+            {L"accounts", 0xE8F1},              // Library: the ledger's books
+            {L"voucher reports", 0xE9F9},       // ReportDocument
+            {L"cancel voucher", 0xE711},        // Cancel
+            {L"post voucher", 0xE724},          // Send
+            {L"transactions", 0xE8AB},          // Switch
+            {L"receipts/payments", 0xE8C7},     // PaymentCard
+            {L"general ledger", 0xE82D},        // Dictionary (a bound book)
+            {L"financial statements", 0xEB05},  // PieSingle
+            {L"reporting", 0xE9D2},             // AreaChart
+            {L"maintenance", 0xE90F},           // Repair
+            {L"help", 0xE897},                  // Help
+        };
+        for (const auto& g : kGroups)
+            if (has(g.words)) return g.glyph;
+        return fallback ? fallback : 0xE8B7;
+    }
+    static const struct { const wchar_t* words; wchar_t glyph; } kRows[] = {
+        {L"(classic)", 0xE81C},           // History: the old dialog
+        {L"home", 0xE80F},                // Home
+        {L"printer setup", 0xE713},       // Setting
+        {L"print", 0xE749},               // Print
+        {L"exit", 0xE7E8},                // PowerButton
+        {L"company profile", 0xE731},     // Contact card
+        {L"calculator", 0xE8EF},          // Calculator
+        {L"recover", 0xE7A7},             // Undo
+        {L"restore", 0xE777},             // UpdateRestore
+        {L"backup", 0xE74E},              // Save
+        {L"reindex", 0xE895},             // Sync
+        {L"user access", 0xE8D7},         // Permissions
+        {L"purge", 0xE74D},               // Delete
+        {L"year end", 0xE787},            // Calendar
+        {L"prior period", 0xE787},        // Calendar
+        {L"update ar", 0xE72C},           // Refresh
+        {L"external", 0xE8B5},            // Import
+        {L"bank", 0xE825},                // Bank
+        {L"confirm", 0xE73E},             // CheckMark
+        {L"clear receipts", 0xE73E},      // CheckMark
+        {L"cheque", 0xE8C7},              // PaymentCard
+        {L"pre-payment", 0xE8C7},         // PaymentCard
+        {L"inquiry", 0xE721},             // Search
+        {L"layout", 0xE8A9},              // ViewAll
+        {L"trial balance", 0xE9D5},       // CheckList
+        {L"aged", 0xE916},                // Stopwatch
+        {L"forecast", 0xE9D2},            // AreaChart
+        {L"requirement", 0xE9D2},         // AreaChart
+        {L"vat", 0xE8EF},                 // Calculator
+        {L"tax", 0xE8EF},                 // Calculator
+        {L"budget data", 0xE8EF},         // Calculator
+        {L"balance sheet", 0xEB05},       // PieSingle
+        {L"income", 0xE9D2},              // AreaChart
+        {L"cash flow", 0xE9D2},           // AreaChart
+        {L"custom report", 0xE9F9},       // ReportDocument
+        {L"report", 0xE9F9},              // ReportDocument
+        {L"journal", 0xE82D},             // Dictionary
+        {L"register", 0xE82D},            // Dictionary
+        {L"chart of accounts", 0xEA37},   // List
+        {L"list", 0xEA37},                // List
+        {L"summary", 0xE9D2},             // AreaChart
+        {L"statement", 0xE8A5},           // Document
+        {L"department", 0xE821},          // Work (a briefcase)
+        {L"medical", 0xE77B},             // Contact
+        {L"doctor", 0xE95E},              // Health
+        {L"product", 0xE7B8},             // Package
+        {L"customer", 0xE716},            // People
+        {L"receiv", 0xE716},              // People
+        {L"receipt", 0xE716},             // People
+        {L"vendor", 0xE7BF},              // ShoppingCart
+        {L"vender", 0xE7BF},              // ShoppingCart (the menu's spelling)
+        {L"payable", 0xE7BF},             // ShoppingCart
+        {L"purchase", 0xE7BF},            // ShoppingCart
+        {L"sales", 0xE719},               // Shop
+        {L"cash", 0xE8C7},                // PaymentCard
+        {L"add/modify", 0xE70F},          // Edit
+        {L"disposal", 0xE74D},            // Delete
+        {L"type", 0xE8EC},                // Tag
+        {L"create voucher", 0xE710},      // Add
+        {L"general ledger", 0xE8A5},      // Document: the GL voucher
+        {L"slip", 0xE8A5},                // Document
+        {L"detail", 0xE8A5},              // Document
+        {L"status", 0xE9D5},              // CheckList
+        {L"listing", 0xEA37},             // List
+        {L"using help", 0xE897},          // Help
+        {L"about", 0xE946},               // Info
+    };
+    if (t == L"new") return 0xE710;    // Add
+    if (t == L"open") return 0xE8E5;   // OpenFile (not "Open Payables Detail")
+    for (const auto& r : kRows)
+        if (has(r.words)) return r.glyph;
+    return fallback ? fallback : 0xE8A5;   // Document
+}
+
+} // namespace
+
 void ManilaGL::BuildNavigation()
 {
     ClearNavigation();
-    AddNavItem(TVI_ROOT, L"Home", CM_HOME);   // spec #8 5.5: first
+    AddNavItem(TVI_ROOT, L"Home", CM_HOME, false, NavGlyph(L"Home", false, 0));   // spec #8 5.5: first
     std::vector<HTREEITEM> open;   // open[d]: the group rows at depth d go into
     bool skipping = false;         // inside the Window menu
     HTREEITEM accounts = nullptr;
@@ -611,14 +720,18 @@ void ManilaGL::BuildNavigation()
         if (skipping || r.kind == cmd::Kind::Separator) continue;
         open.resize(static_cast<size_t>(r.depth));
         HTREEITEM parent = open.empty() ? TVI_ROOT : open.back();
+        const std::wstring text = cmd::PlainText(r.text);
         if (r.kind == cmd::Kind::Popup) {
-            open.push_back(AddNavItem(parent, cmd::PlainText(r.text), 0));
-            if (r.depth == 0 && cmd::PlainText(r.text) == L"Accounts") accounts = open.back();
+            open.push_back(AddNavItem(parent, text, 0, false, NavGlyph(text, true, 0)));
+            if (r.depth == 0 && text == L"Accounts") accounts = open.back();
         } else {
-            AddNavItem(parent, cmd::PlainText(r.text), r.id);
+            AddNavItem(parent, text, r.id, false, NavGlyph(text, false, 0));
             if (!parentOf.count(static_cast<WORD>(r.id))) parentOf[static_cast<WORD>(r.id)] = parent;
         }
     }
+    auto classic = [this](HTREEITEM parent, const std::wstring& text, WORD id) {
+        AddNavItem(parent, text, id, false, NavGlyph(text, false, 0));
+    };
     std::vector<ClassicCommand> classics = ClassicCommands();
     const std::vector<ClassicCommand>& vouchers = VoucherClassicCommands();
     classics.insert(classics.end(), vouchers.begin(), vouchers.end());
@@ -626,12 +739,12 @@ void ManilaGL::BuildNavigation()
     classics.insert(classics.end(), tasks.begin(), tasks.end());
     for (const ClassicCommand& c : classics) {
         const auto p = parentOf.find(c.page);
-        if (p != parentOf.end()) AddNavItem(p->second, c.text, c.classic);
+        if (p != parentOf.end()) classic(p->second, c.text, c.classic);
     }
     // The classic dialog of a screen that became a page (spec #8 Q4): not on the menu.
-    if (accounts) AddNavItem(accounts, L"Sales Customers (classic)", CM_AR_CUSTOMERS_CLASSIC);
+    if (accounts) classic(accounts, L"Sales Customers (classic)", CM_AR_CUSTOMERS_CLASSIC);
     const auto rp = parentOf.find(static_cast<WORD>(CM_REPORT_LIST));
-    if (rp != parentOf.end()) AddNavItem(rp->second, L"Custom Report (classic)", CM_REPORT_LIST_CLASSIC);
+    if (rp != parentOf.end()) classic(rp->second, L"Custom Report (classic)", CM_REPORT_LIST_CLASSIC);
 }
 
 void ManilaGL::RestoreState()
