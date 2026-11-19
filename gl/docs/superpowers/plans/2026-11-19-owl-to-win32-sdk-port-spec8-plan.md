@@ -2,7 +2,7 @@
 
 **Spec reference:** `gl/docs/superpowers/specs/2026-11-19-owl-to-win32-sdk-port-spec8-design.md`
 **Date:** 2026-11-19
-**Plan status:** In progress (S8-M0 and M1 built)
+**Plan status:** In progress (S8-M0 to M2 built)
 
 **Paths:** relative to the repository root. The shell today is `gl/port/ManilaGL.{h,cpp}` on `win32fx/include/MdiFrame.h`, with the menu, toolbar and status bar from `gl/res/gl.rc` (made by `gl/res/tools/prune_rc.py`) and `win32fx/include/Toolbar.h` / `StatusBar.h`. Screens are `MainDialog` subclasses in `gl/port/`. New framework code goes in `win32fx/` (`Workspace`, `Page`, `Layout`, the controls), the command table in `gl/port/Commands.{h,cpp}`, pages in `gl/port/pages/`, and page templates in `gl/res/port.rc` with their IDs in `gl/port/PortIds.h`.
 
@@ -264,6 +264,55 @@ S is less than a day, M is 1–3 days, L is 3–6 days. **Parallel work:** M2, M
 ---
 
 ## Milestone 2 — The other list-and-detail pages
+
+> **As built (2026-11-19; built and run on Windows 11, VS 18, v145).**
+> - **Generated forms** (`gl/res/tools/make_pages.py`): one table of pages writes their templates (`gl/res/pages.rc`, #included by `port.rc`) and their C++ descriptors (`gl/port/pages/PageDescs.inc`): the list's columns, each field's control, key, kind and width, and every control's anchor.
+>   - **The layout** is fixed: New, Save and Delete (and a page's own buttons) along the top; the filter and the list on the left; the field groups in two columns.
+>   - **IDs:** `IDD_PG_DEPARTMENTS` to `IDD_PG_USERS` (20009 to 20017). The controls are numbered per form, 21000 to 21999 (`PortIds.h`).
+> - **One page class** (`pages/RecordPage.h`, `RecordPages.cpp`) shows any of them: the Customers page's pattern, driven by a descriptor and a model.
+>   - **Field kinds:** text, upper case, whole number, decimal, amount, date (the date picker), choice (a drop-down list), account (a lookup over the chart, with its dept and name), password, and read-only.
+>   - **A record's key** is read-only once saved.
+>   - **A read-only field** is worked out by the model as you type, such as an asset's monthly amount and book value.
+> - **Portable models** (`pages/RecordModel.{h,cpp}`, `pages/RecordModels.{h,cpp}`):
+>   - **The base** holds the rows and the record as text by field key. It refuses a new record whose key is taken, so nothing asks "modify?" (D9).
+>   - **Each model** reads and writes through the core its classic dialog uses, with that dialog's rules:
+>     - **Departments:** a code and a description.
+>     - **Medical reps and doctors**, and **products:** a code. Products' cost and unit price take three decimals, as their fields do.
+>     - **Vendors:** `CheckVendor`, with GL_SETAT's default accounts; a vendor in use isn't deleted.
+>     - **The chart:** an account and a description. A new account needs a type, and never a second retained earnings account. One with balances isn't deleted.
+>     - **Asset types:** three accounts in the chart; a type in use isn't deleted.
+>     - **Fixed assets:** `CheckAsset`; a disposed asset isn't changed; a depreciated one keeps its run's figures (spec #4 D6) and isn't deleted.
+>     - **Users:** a user ID and a level.
+> - **The pages:** Chart of Accounts (1004), Department Codes (10061), Purchase Vendors (4045), Medical Reps (6042), Product Codes (6005), Doctor Codes (6040), Fixed Assets > Add/Modify (6000), Asset Types (6036) and User Access (4078) open pages.
+>   - **Classic entries:** each old dialog stays as a "(classic)" entry beside its command in the navigation pane (`CM_*_CLASSIC`, 20509 to 20517), following the page's right.
+>   - **Fixed Assets** has Dispose..., which opens Fixed Assets > Disposal; Disposal stays a command of its own.
+> - **User Access** (task 3) is one page: the users on the left; the user's fields; and the level's commands as check boxes, grouped by menu (accessm's POPUP), checked for allowed.
+>   - **Saving** writes `accessl.MENUCODE` as `AccessMenus` did, a character per accessm row in its COUNT order, but only the characters of the rows changed. An unchanged level isn't written, and a code is never shortened or padded beyond the row changed.
+>   - **A level accessl doesn't have** shows the first level's code (as the login uses it). It is added only when its commands are changed.
+>   - **Reset** (string 8152: the session takes the level's code at once) isn't on the page. Rights are read at the next login.
+> - **List Window Parameters** (1035, task 4): no page has it, since the filter box is the query. It stays in the classic dialogs' lists (`TableList`) until they go (S8-M7).
+> - **Deferred, with the reason:**
+>   - **Budget Data** as a tab of the account: the Budget Data command (10074) still opens the dialog. The budget grid needs M3's entry grid.
+>   - **Company Profile's accounts and banks:** Company Profile is one dialog over GL_SETAT and GL_PROF. Its page needs the grid too, so it waits for M3.
+>   - The Customers page stays as built in M1, not moved onto the generic page.
+> - **`/checkres`, `/stress`** (task 5): `/checkres` checks every generated form (it loads as a child, its captions fit, every control has an anchor). `/stress` opens each page 25 times, with a filter and two selections.
+> - **Tests** (task 6, `gl_tests/test_pages.cpp`, 8 cases): each model through its screen's rules on the dev fixture, with the results read back with SQL. They include the refusals, a taken key, saving with nothing asked, and deleting.
+>   - **User Access:** every fixture level is written back through the model and compared byte for byte, a row is grayed and allowed again, and a level accessl lacks is shown and not added.
+>
+>   `gl_tests` 195.
+> - **Checked:**
+>   - Debug and Release `/W4 /WX` clean; the suites pass in both; `/checkres` 0 in both; `/stress` 0 in both.
+>   - Driven in the app on a scratch copy, by messages to its own windows:
+>     - **Every page** opened from its command, each in its own tab with its list: 2 departments, 3 medical reps, 3 doctors, 3 products, 3 vendors, 25 accounts, 2 asset types, 4 assets and 2 users. Purchase Vendors again brought its tab forward.
+>     - **Departments:** 30 with no description was refused with its field marked. With "Sales" it saved ("Department 30 saved.", `gldept` read back).
+>     - **Chart of Accounts:** 998000 with no type was refused ("Choose the account's type."). As a balance sheet account it saved (`glaccts` read back).
+>     - **Vendors:** V001's AP account showed its name from the chart. Delete asked in a task dialog and was refused: "invoice voucher 1 is theirs".
+>     - **Fixed Assets:** E004 showed disposed on 08/15/2026 with a book value of 0.00, and a change was refused. Switching to E001 asked about the unsaved change; Don't save showed E001's monthly amount, 500.00.
+>     - **User Access:** CLERK showed level B's 117 commands. A click on File > New's check box marked the tab "•". Saving wrote level B's code with a "1" in that place and nothing else changed; checking it again and saving gave back the same bytes.
+>     - **Classic:** "Department Codes (classic)" opened dialog 1023 with its list.
+>
+>     Screenshots checked the Vendors and Users pages.
+> - **Not driven:** typing into a lookup, Enter and Ctrl+S (the drive sends no keystrokes); the Dispose... button; Products', Doctors' and Asset Types' saves (the tests cover them).
 
 **Goal:** every master screen is a page like Customers.
 

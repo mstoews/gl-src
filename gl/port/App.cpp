@@ -62,6 +62,7 @@
 #include "Ini.h"
 #include "CommandsMenu.h"
 #include "pages/CustomersPage.h"
+#include "pages/RecordPage.h"
 #include "ManilaGL.h"
 #include "PortIds.h"
 #include "ResourceCheck.h"
@@ -173,7 +174,9 @@ int WINAPI wWinMain(_In_ HINSTANCE inst, _In_opt_ HINSTANCE, _In_ LPWSTR cmdLine
         const int ap = stressStep([] { return StressAp(25); });
         const int ar = stressStep([] { return StressAr(25); });
         const int designer = stressStep([] { return StressReportDesigner(25); });
-        const int pages = stressStep([] { return StressCustomersPage(25); });   // spec #8 S8-M1
+        const int customers = stressStep([] { return StressCustomersPage(25); });   // spec #8 S8-M1
+        const int records = stressStep([] { return StressRecordPages(25); });      // S8-M2: the other pages
+        const int pages = customers < 0 || records < 0 ? -1 : customers + records;
         const int growth =
             (accounts < 0 || master < 0 || vouchers < 0 || posting < 0 || inquiry < 0 || reports < 0 || assets < 0 ||
              layout < 0 || ap < 0 || ar < 0 || designer < 0 || pages < 0)
@@ -184,11 +187,11 @@ int WINAPI wWinMain(_In_ HINSTANCE inst, _In_opt_ HINSTANCE, _In_ LPWSTR cmdLine
             MessageBoxW(nullptr,
                         fx::Format(L"Chart of Accounts opened and closed 100 times, and Department, Medical Rep, "
                                    L"Doctor and Product Codes, Voucher Entry, Post, Recover, Cancel, Transaction "
-                                   L"Inquiry, every report's preview, the Fixed Assets screens, Statement Layout, the AP and AR screens and the Report Designer 25 times each.\n"
+                                   L"Inquiry, every report's preview, the Fixed Assets screens, Statement Layout, the AP and AR screens, the Report Designer and every page 25 times each.\n"
                                    L"GDI + USER objects: %+d.\n\n"
                                    L"Per step (-1: could not run): Chart of Accounts %+d, master data %+d, "
                                    L"voucher entry %+d, posting %+d, inquiry %+d, reports %+d, fixed assets %+d, layout %+d, AP %+d, AR %+d, "
-                                   L"designer %+d, Customers page %+d.",
+                                   L"designer %+d, pages %+d.",
                                    growth, accounts, master, vouchers, posting, inquiry, reports, assets, layout, ap, ar,
                                    designer, pages).c_str(),
                         szApp, MB_OK | (growth == 0 ? MB_ICONINFORMATION : MB_ICONEXCLAMATION));
