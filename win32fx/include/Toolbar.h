@@ -43,6 +43,9 @@ public:
     void AddButton(int picture, WORD command, const std::wstring& tip);
     void AddSeparator();
 
+    // Enables or greys the buttons that send `command` (spec #8 8: the rights).
+    void EnableCommand(WORD command, bool enabled);
+
     // The bar's height for its buttons, in px: dock it with this.
     int Height() const;
 

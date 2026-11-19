@@ -18,22 +18,6 @@
 
 namespace win32fx {
 
-namespace {
-
-bool ensureClass(HINSTANCE inst, const wchar_t* className, HICON icon, HBRUSH background)
-{
-    WNDCLASSEXW existing{};
-    existing.cbSize = sizeof existing;
-    if (GetClassInfoExW(inst, className, &existing)) return true;
-    WNDCLASSEXW wc = Window::ClassInfo(inst, className);
-    wc.hIcon = icon;
-    wc.hIconSm = icon;
-    wc.hbrBackground = background;
-    return RegisterClassExW(&wc) != 0;
-}
-
-} // namespace
-
 // ---- MdiFrame ----
 
 HWND MdiFrame::CreateFrame(HINSTANCE inst, const wchar_t* className, const wchar_t* title, HMENU menu,
@@ -42,7 +26,7 @@ HWND MdiFrame::CreateFrame(HINSTANCE inst, const wchar_t* className, const wchar
     inst_ = inst;
     firstChildId_ = firstChildId;
     windowMenu_ = (menu && windowMenuPos >= 0) ? GetSubMenu(menu, windowMenuPos) : nullptr;
-    if (!ensureClass(inst, className, icon, reinterpret_cast<HBRUSH>(COLOR_APPWORKSPACE + 1))) return nullptr;
+    if (!EnsureWindowClass(inst, className, icon, reinterpret_cast<HBRUSH>(COLOR_APPWORKSPACE + 1))) return nullptr;
     return Create(0, className, title, WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN, CW_USEDEFAULT, CW_USEDEFAULT,
                   CW_USEDEFAULT, CW_USEDEFAULT, nullptr, menu, inst);
 }
@@ -152,31 +136,31 @@ LRESULT MdiFrame::DefaultProc(UINT msg, WPARAM wp, LPARAM lp)
     return DefFrameProcW(hwnd(), client_, msg, wp, lp);
 }
 
-// ---- MdiChild ----
+// ---- PageHost: pages are MDI children ----
 
-HWND MdiChild::CreateChild(MdiFrame& parentFrame, const wchar_t* className, const wchar_t* title, DWORD style,
-                           int x, int y, int cx, int cy, HICON icon)
+HWND MdiFrame::CreatePage(HostedPage& page, const wchar_t* className, const wchar_t* title, HICON icon)
 {
-    frame_ = &parentFrame;
-    if (!ensureClass(parentFrame.instance(), className, icon, reinterpret_cast<HBRUSH>(COLOR_WINDOW + 1)))
-        return nullptr;
-    return CreateMDIWindowW(className, title, style, x, y, cx, cy, parentFrame.mdiClient(), parentFrame.instance(),
-                            reinterpret_cast<LPARAM>(static_cast<Window*>(this)));
+    page.host_ = this;
+    if (!EnsureWindowClass(inst_, className, icon, reinterpret_cast<HBRUSH>(COLOR_WINDOW + 1))) return nullptr;
+    return CreateMDIWindowW(className, title, WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
+                            CW_USEDEFAULT, client_, inst_, reinterpret_cast<LPARAM>(static_cast<Window*>(&page)));
 }
 
-bool MdiChild::OnMessage(UINT msg, WPARAM, LPARAM lp, LRESULT&)
+void MdiFrame::ActivatePage(HWND page)
 {
-    if (msg == WM_MDIACTIVATE && frame_) {
-        const HWND activated = reinterpret_cast<HWND>(lp);
-        if (activated == hwnd()) frame_->OnMdiChildActivate(activated);
-        else if (!activated) frame_->OnMdiChildActivate(nullptr);   // the last child is going
-    }
-    return false;   // DefMDIChildProc too
+    if (!client_ || !page) return;
+    SendMessageW(client_, WM_MDIACTIVATE, reinterpret_cast<WPARAM>(page), 0);
+    if (IsIconic(page)) SendMessageW(client_, WM_MDIRESTORE, reinterpret_cast<WPARAM>(page), 0);
 }
 
-LRESULT MdiChild::DefaultProc(UINT msg, WPARAM wp, LPARAM lp)
+void MdiFrame::ClosePage(HWND page)
 {
-    return DefMDIChildProcW(hwnd(), msg, wp, lp);
+    if (client_ && page) SendMessageW(client_, WM_MDIDESTROY, reinterpret_cast<WPARAM>(page), 0);
+}
+
+void MdiFrame::SetPageTitle(HWND page, const wchar_t* title)
+{
+    if (page) SetWindowTextW(page, title);
 }
 
 } // namespace win32fx

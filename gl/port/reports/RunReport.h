@@ -27,71 +27,71 @@
 using ReportOptionsFn = std::function<bool(HWND owner)>;   // false: cancelled; null: no options
 using ReportBuilder = std::function<rpt::Report(const ReportContext&)>;
 
-void RunReport(fx::MdiFrame& frame, ReportOptionsFn options, ReportBuilder build);
+void RunReport(fx::PageHost& frame, ReportOptionsFn options, ReportBuilder build);
 
 // The context for the open company database, printed today.
 ReportContext CurrentReportContext();
 
 // The sample report (SampleReport.h): CM_SAMPLE_REPORT, gl.exe /samplereport.
-void RunSampleReport(fx::MdiFrame& frame);
+void RunSampleReport(fx::PageHost& frame);
 
 // F1 Trial Balance (6076) and F2 Distribution Trial Balance (1075), spec #3
 // 5.2-5.3: their options dialog, then the preview. The options are kept for
 // the session.
-void RunTrialBalance(fx::MdiFrame& frame);
-void RunDistributionTrialBalance(fx::MdiFrame& frame);
+void RunTrialBalance(fx::PageHost& frame);
+void RunDistributionTrialBalance(fx::PageHost& frame);
 
 // F3 Income Statement (1015), F4 Balance Sheet (1016), F5 Cash Flow
 // Statement (1018), spec #3 5.4, D13: options, then the preview; the options
 // are kept for the session, per statement. The layout tables are created on
 // the first run (StatementLayout.h).
-void RunIncomeStatement(fx::MdiFrame& frame);
-void RunBalanceSheet(fx::MdiFrame& frame);
-void RunCashFlowStatement(fx::MdiFrame& frame);
+void RunIncomeStatement(fx::PageHost& frame);
+void RunBalanceSheet(fx::PageHost& frame);
+void RunCashFlowStatement(fx::PageHost& frame);
 
 // The original account reports (AccountReports.h): 6080 Trial Balance by
 // Dept., 10071 Chart of Accounts Report (also the toolbar's inquiry button),
 // 10073 Budget Report. No options, as the originals: straight to the preview.
-void RunTrialBalanceByDept(fx::MdiFrame& frame);
-void RunChartOfAccountsReport(fx::MdiFrame& frame);
-void RunBudgetReport(fx::MdiFrame& frame);
+void RunTrialBalanceByDept(fx::PageHost& frame);
+void RunChartOfAccountsReport(fx::PageHost& frame);
+void RunBudgetReport(fx::PageHost& frame);
 
 // The original voucher reports (VoucherReports.h): 6074 Voucher Slips, 8082
 // Voucher Detail, 6075 Voucher Summary, 6078 Preposting Distribution List,
 // 8136 Pre-Posting Report. No options. (Voucher Entry's Print shows one
 // slip itself: VoucherEntry.cpp.)
-void RunVoucherSlips(fx::MdiFrame& frame);
-void RunVoucherDetail(fx::MdiFrame& frame);
-void RunVoucherSummary(fx::MdiFrame& frame);
-void RunPrepostingDistribution(fx::MdiFrame& frame);
-void RunPrePostingReport(fx::MdiFrame& frame);
+void RunVoucherSlips(fx::PageHost& frame);
+void RunVoucherDetail(fx::PageHost& frame);
+void RunVoucherSummary(fx::PageHost& frame);
+void RunPrepostingDistribution(fx::PageHost& frame);
+void RunPrePostingReport(fx::PageHost& frame);
 
 // The master-data listings (MasterReports.h): 6039 Medical Representatives,
 // 6038 Product code summary, 6041 Doctor Codes. No options.
-void RunMedicalRepsListing(fx::MdiFrame& frame);
-void RunProductCodesListing(fx::MdiFrame& frame);
-void RunDoctorCodesListing(fx::MdiFrame& frame);
+void RunMedicalRepsListing(fx::PageHost& frame);
+void RunProductCodesListing(fx::PageHost& frame);
+void RunDoctorCodesListing(fx::PageHost& frame);
 
 // The fixed-asset reports (AssetReports.h, spec #4 7): 1019 Fixed Asset
 // Summary, with the check against the ledger, and 1020 Fixed Asset Types.
 // No options.
-void RunFixedAssetListing(fx::MdiFrame& frame);
-void RunFixedAssetTypes(fx::MdiFrame& frame);
+void RunFixedAssetListing(fx::PageHost& frame);
+void RunFixedAssetTypes(fx::PageHost& frame);
 
 // The AP reports (ApReports.h, spec #5 7): runs the report of command `id`
 // (1049 ... 8078, 4091 Cheques), straight to the preview, as the originals had
 // no options. False if `id` isn't an AP report.
-bool RunApReport(fx::MdiFrame& frame, WORD id);
+bool RunApReport(fx::PageHost& frame, WORD id);
 
 // The AR reports (ArReports.h, spec #6 7): runs the report of command `id`
 // (4056 ... 4076, CM_AR_STATEMENTS), straight to the preview. False if `id`
 // isn't an AR report.
-bool RunArReport(fx::MdiFrame& frame, WORD id);
+bool RunArReport(fx::PageHost& frame, WORD id);
 
 // A user report (spec #7, ReportWriter.h): gl_rptdef's definition `number`,
 // built by the report writer, then the preview. A definition that can't be
 // read or built says why, and opens nothing.
-void RunUserReport(fx::MdiFrame& frame, long number);
+void RunUserReport(fx::PageHost& frame, long number);
 
 // /stress: opens each report in a preview `times` times (the sample report
 // with three copies, F1, F2 with voucher lines, F3 with every column, F4,

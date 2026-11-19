@@ -2,7 +2,7 @@
 
 **Spec reference:** `gl/docs/superpowers/specs/2026-11-19-owl-to-win32-sdk-port-spec8-design.md`
 **Date:** 2026-11-19
-**Plan status:** Not started
+**Plan status:** In progress (S8-M0 built)
 
 **Paths:** relative to the repository root. The shell today is `gl/port/ManilaGL.{h,cpp}` on `win32fx/include/MdiFrame.h`, with the menu, toolbar and status bar from `gl/res/gl.rc` (made by `gl/res/tools/prune_rc.py`) and `win32fx/include/Toolbar.h` / `StatusBar.h`. Screens are `MainDialog` subclasses in `gl/port/`. New framework code goes in `win32fx/` (`Workspace`, `Page`, `Layout`, the controls), the command table in `gl/port/Commands.{h,cpp}`, pages in `gl/port/pages/`, and page templates in `gl/res/port.rc` with their IDs in `gl/port/PortIds.h`.
 
@@ -50,6 +50,63 @@ S is less than a day, M is 1–3 days, L is 3–6 days. **Parallel work:** M2, M
 ---
 
 ## Milestone 0 — The workspace and the command table
+
+> **As built (2026-11-19; built and run on Windows 11, VS 18, v145).**
+> - **Read** (task 1):
+>   - **What took the MDI frame:** `OpenPreview` and `PrintActivePreview`, `RunReport` and every `Run*` report function, `OpenVoucherBrowser`, `StressFrame`, and the example program.
+>   - **The GLE menu swap was dead:** nothing calls `UseGleMenu`, since only the spreadsheet window (never ported) asked for it. It is removed rather than carried over.
+>   - **The globals the cores read** (R2): `cb`, `szUser`, `szAccessLevel`, `szMsg`, `CurDir`, `bMenuSetup`. Pages must read them only; no page writes them yet.
+> - **`win32fx::PageHost`** (task 2, `PageHost.{h,cpp}`):
+>   - **The interface:** `hostWindow`, `CreatePage`, `activePage`, `ActivatePage`, `ClosePage`, `SetPageTitle` and `OnPageActivate`.
+>   - **`HostedPage`** replaces `MdiChild`, which stays as an alias. Its default procedure is `DefMDIChildProc` only under an MDI host.
+>   - **Who takes it:** the preview, `RunReport`, the report functions and the voucher list now take a `PageHost&`.
+>   - **`MdiFrame` implements it too.** The modal preview window (`ShowPreviewWindow`) and the example program still use MDI, and both kept working through the change (P1).
+> - **`win32fx::Workspace`** (task 3, `Workspace.{h,cpp}`, `Dock.h`):
+>   - **The window:** the docked bars, a TreeView navigation pane (230 px at 96 DPI, Explorer theme), and a Tab control over the page area.
+>   - **Pages** are its child windows: only the active one is shown, and the tab strip is hidden while no page is open. A page's tab goes when the page is destroyed, however that happens (`WM_PARENTNOTIFY`).
+>   - **Keys** go through a new message-loop key filter (`SetKeyFilter`): Ctrl+Tab and Ctrl+Shift+Tab, Ctrl+W and Ctrl+F4, and Ctrl+Shift+N for the navigation pane.
+>   - **The tab context menu:** Close and Close others.
+>   - **The legacy Window menu:**
+>     - it lists the open pages, as MDI listed children;
+>     - Close Children closes them;
+>     - Tile, Cascade and Arrange Icons have nothing to arrange and are greyed.
+> - **The command table** (task 4):
+>   - **Generated:** `gl/res/tools/make_commands.py` writes `gl/port/CommandsTable.inc` from MANILA in `gl.rc`: 165 rows, 116 menu items, 114 commands. The Customer and Vendor Inquiry Reports are also on the Reporting menu as Open Receivables and Payables Detail.
+>   - **Portable `Commands.{h,cpp}`:** the rows, `PathOf`, `PlainText`, `RightOf` (the follow-on rules: Statement Layout, the Recover items, the Voucher List), and `cmd::Rights`. `Rights` reads `accessm` in the "menu" order with `Data4`, as `ApplyMenuAccess` did, deleted rows included.
+>   - **The Win32 half, `CommandsMenu.{h,cpp}`:** builds the menu bar, and compares two menus item by item.
+>   - **Deviation:** the CSV of hand-added fields (icon, module, kind) waits until a milestone needs them. The navigation pane uses the menu's popups as its groups.
+> - **`ManilaGL`** (task 5): a `Workspace`.
+>   - **The menu bar** is built from the table (`App.cpp`).
+>   - **The navigation pane** holds every popup and command but the Window menu.
+>   - **Rights:** `ApplyRights` greys the menu, the toolbar (new: `CommandBar::EnableCommand`) and the navigation pane through `MayRun`. A command the rights deny doesn't run even if posted or keyed, where the old frame only greyed the menu. Rights reload after Restore. `ApplyMenuAccess` is gone.
+>   - **GLSUB:** a right-click on the empty page area opens it.
+>   - **Unchanged:** `OnCommand`'s routing.
+> - **`/checkres`** (task 6):
+>   - the menu built from the table must equal MANILA loaded from the resources, item by item ("114 commands");
+>   - a hidden workspace opens two pages, switches, fills the page area, lists the pages in the Window menu, and closes them.
+>
+>   `/stress`'s report step now runs on a hidden workspace, so every preview opens and closes as a tab.
+> - **Tests** (task 7, `gl_tests/test_commands.cpp`, 3 cases):
+>   - **The table against the menu:** its top-level menus, item and command counts, paths and depths.
+>   - **The rights against the legacy walk:** the walk replayed (rows beside the code, then the follow-on rules), compared with `MayRun` for every command. It covers levels A and B, no login, all-off, a code that stops halfway, and one longer than the rows. B loses every Maintenance command.
+>   - **Edge cases:** rights with no `accessm`, and a command with two rows.
+>
+>   `gl_tests` 182, `report_tests` 19, `cb4sqlite_tests` 77.
+> - **Checked:**
+>   - Debug and Release `/W4 /WX` clean; the three suites pass in both; `/checkres` 0 in both; `/stress` 0 (216 s).
+>   - Driven in the app on a scratch copy, by messages to its own windows:
+>     - **The workspace:** it opens with the navigation pane and no tabs. Enter on Transactions > Voucher List opened it as a tab. Trial Balance by Dept. and the Chart of Accounts report opened as tabs 2 and 3.
+>     - **The Window menu** listed the three. Its first entry made tab 1 active, and Close Children closed all three.
+>     - **Every command:** each of the 114 was posted from the frame, and whatever opened was closed (Exit skipped). Only the Window menu's four commands opened nothing, with no pages open.
+>     - **The message boxes:** eight opened one, all the program's own: six "not part of Spec #1", Reindex's note, and Year End's question (answered No).
+>     - **The clerk** (level B, logged in on the scratch copy): Maintenance greyed, Accounts not, and a posted Reindex ran nothing.
+>
+>     Screenshots checked the workspace empty, with tabs, and as the clerk.
+> - **Found while checking:**
+>   - Git Bash rewrote `/checkres /quiet` into paths, so the first bash-run results meant nothing; the checks were rerun from PowerShell.
+>   - The first `/checkres` run failed its own switching check. `IsWindowVisible` is false for children of the hidden test workspace; the check now reads `WS_VISIBLE`.
+>   - Smart App Control blocked the new unsigned builds until the user turned it off.
+> - **Not done here, as planned:** pinned tabs and remembered window state (M1, with `GL_UISTATE`); the command search (M5).
 
 **Goal:** the program runs in one window with a navigation pane and tabs; every command works as before; nothing about the screens has changed yet.
 

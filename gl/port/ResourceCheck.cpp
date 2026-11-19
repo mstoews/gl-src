@@ -11,6 +11,8 @@
 // /screenshots (App.cpp).
 //
 #include "ResourceCheck.h"
+#include "Commands.h"
+#include "CommandsMenu.h"
 
 #include "PortIds.h"
 
@@ -336,6 +338,59 @@ void checkMenus(HINSTANCE inst, Report& r)
             r.check(std::wstring(text) == L"&Custom Report...", fx::Format(L"%s: Custom Report is CM_REPORT_LIST", name));
         }
     }
+    // Spec #8 S8-M0: the menu the program shows is built from the command
+    // table; it must be MANILA, item by item.
+    fx::MenuGuard manila(LoadMenuW(inst, L"MANILA"));
+    fx::MenuGuard built(BuildCommandMenu());
+    std::wstring why;
+    const bool same = SameMenus(built.get(), manila.get(), why);
+    r.check(same, same ? fx::Format(L"the command table's menu is MANILA (%u commands)",
+                                    static_cast<unsigned>(cmd::CommandIds().size()))
+                       : L"the command table's menu is MANILA: " + why);
+}
+
+// Spec #8 S8-M0: the workspace opens, hosts pages in tabs, switches and closes
+// them, and lists them in the Window menu.
+class CheckPage : public fx::HostedPage {};
+
+class CheckWorkspace : public fx::Workspace {
+protected:
+    bool OnDestroy() override { return true; }   // not the main window
+};
+
+void checkWorkspace(HINSTANCE inst, Report& r)
+{
+    fx::MenuGuard menu(BuildCommandMenu());
+    CheckWorkspace w;
+    if (!w.CreateWorkspace(inst, L"GLCheckWorkspace", L"check", menu.get(), 7)) {
+        r.check(false, L"workspace: created");
+        return;
+    }
+    r.check(w.navigation() != nullptr, L"workspace: created, with its navigation pane");
+    CheckPage a, b;
+    const HWND ha = a.CreatePage(w, L"GLCheckPage", L"First");
+    const HWND hb = b.CreatePage(w, L"GLCheckPage", L"Second");
+    r.check(ha && hb && w.pages().size() == 2 && w.activePage() == hb, L"workspace: two pages, the second active");
+    w.ActivatePage(ha);
+    // The workspace itself is hidden here, so IsWindowVisible is false for any
+    // child: the pages' own WS_VISIBLE says which one is shown.
+    auto shown = [](HWND h) { return (GetWindowLongW(h, GWL_STYLE) & WS_VISIBLE) != 0; };
+    r.check(w.activePage() == ha && shown(ha) && !shown(hb), L"workspace: switching shows one page");
+    const RECT page = w.pageRect();
+    RECT pr{};
+    GetWindowRect(ha, &pr);
+    MapWindowPoints(nullptr, w.hwnd(), reinterpret_cast<POINT*>(&pr), 2);
+    r.check(EqualRect(&page, &pr) != FALSE, L"workspace: the page fills the page area");
+    HMENU windowMenu = GetSubMenu(menu.get(), 7);
+    SendMessageW(w.hwnd(), WM_INITMENUPOPUP, reinterpret_cast<WPARAM>(windowMenu), 7);
+    wchar_t text[64] = {};
+    GetMenuStringW(windowMenu, GetMenuItemCount(windowMenu) - 1, text, 64, MF_BYPOSITION);
+    r.check(std::wstring(text) == L"&2 Second", L"workspace: the Window menu lists the pages");
+    w.ClosePage(ha);
+    r.check(w.pages().size() == 1 && w.activePage() == hb && !IsWindow(ha), L"workspace: closing a page activates the next");
+    b.ClosePage();
+    r.check(w.pages().empty() && w.activePage() == nullptr, L"workspace: the last page closed");
+    DestroyWindow(w.hwnd());
 }
 
 BOOL CALLBACK collectName(HMODULE, LPCWSTR, LPWSTR name, LONG_PTR param)
@@ -410,6 +465,7 @@ int RunResourceCheck(HINSTANCE inst, bool quiet)
     Report r;
     checkDialogs(inst, r);
     checkMenus(inst, r);
+    checkWorkspace(inst, r);
     checkImages(inst, r);
     checkStrings(inst, r);
     if (!quiet) {

@@ -22,7 +22,7 @@
 //
 #include "report/Report.h"
 
-#include "MdiFrame.h"   // win32fx
+#include "PageHost.h"   // win32fx
 
 #include <functional>
 #include <optional>
@@ -34,7 +34,7 @@ namespace rpt::win32 {
 using Rebuild = std::function<std::optional<Report>(HWND owner)>;
 
 // Opens a preview of `report` in `frame`. Null if the window couldn't be created.
-HWND OpenPreview(win32fx::MdiFrame& frame, Report report, Rebuild rebuild = {});
+HWND OpenPreview(win32fx::PageHost& host, Report report, Rebuild rebuild = {});
 
 // A preview for a modal dialog (spec #3 D7, Voucher Entry's Print), where an
 // MDI child of the main frame couldn't be used: a frame window of its own,
@@ -49,7 +49,7 @@ bool IsPreview(HWND hwnd) noexcept;
 // If the frame's active MDI child is a preview, prints it (as its Print...
 // button does) and returns true. File > Print and the toolbar Print button
 // (spec #3 D9).
-bool PrintActivePreview(win32fx::MdiFrame& frame);
+bool PrintActivePreview(win32fx::PageHost& host);
 
 // For tests and /stress: the page shown (0-based) and the page count of a
 // preview window; -1 if `hwnd` isn't one.

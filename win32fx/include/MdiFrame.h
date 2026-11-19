@@ -6,14 +6,20 @@
 // the original TGlWindow::WMSize). It handles the OWL TMDIFrame commands the
 // legacy menus still send (CM_TILECHILDREN, ..., CM_EXIT).
 //
-// Menu merging (spec 10 Q5): MdiChild calls OnMdiChildActivate(child) when a
-// child is activated and OnMdiChildActivate(nullptr) when the last one goes
-// away. The library ships only the hook; the GL frame's menu swap (MANILA /
+// It is a PageHost (PageHost.h): pages (HostedPage) are its MDI children.
+// Spec #8 replaced it as the program's main window with Workspace; the modal
+// report preview and the example program still use it.
+//
+// Menu merging (spec 10 Q5): a page's WM_MDIACTIVATE calls
+// OnMdiChildActivate(child) when a child is activated and
+// OnMdiChildActivate(nullptr) when the last one goes away. The library ships only the hook; the GL frame's menu swap (MANILA /
 // GLE) is in its subclass, gl/port/ManilaGL.cpp (plan M5). The merge points
 // are documented in MdiFrame.cpp.
 //
 #pragma once
 
+#include "Dock.h"
+#include "PageHost.h"
 #include "Window.h"
 
 #include <vector>
@@ -27,9 +33,8 @@ inline constexpr WORD CM_CASCADECHILDREN = 24337;
 inline constexpr WORD CM_CLOSECHILDREN   = 24338;
 inline constexpr WORD CM_EXIT            = 24340;
 
-enum class DockSide { Top, Bottom };
 
-class MdiFrame : public Window {
+class MdiFrame : public Window, public PageHost {
 public:
     // Registers `className` (once per process) and creates the frame with
     // `menu`. The Window menu (the one that lists children) is submenu
@@ -53,6 +58,17 @@ public:
     // The menu-merge hook (see the header comment).
     virtual void OnMdiChildActivate(HWND /*child*/) {}
 
+    // PageHost: pages are MDI children of the client.
+    HWND hostWindow() const noexcept override { return hwnd(); }
+    HINSTANCE hostInstance() const noexcept override { return inst_; }
+    HWND CreatePage(HostedPage& page, const wchar_t* className, const wchar_t* title, HICON icon) override;
+    HWND activePage() const noexcept override { return activeChild(); }
+    void ActivatePage(HWND page) override;
+    void ClosePage(HWND page) override;
+    void SetPageTitle(HWND page, const wchar_t* title) override;
+    void OnPageActivate(HWND page) override { OnMdiChildActivate(page); }
+    bool PagesAreMdi() const noexcept override { return true; }
+
     // WM_DPICHANGED (UI refresh spec 5.2): called with the new DPI before the
     // frame takes Windows' suggested rectangle and lays out again. Rebuild
     // pixel-sized things here; a bar whose height changed is docked again.
@@ -74,25 +90,6 @@ private:
     HMENU windowMenu_ = nullptr;
     UINT firstChildId_ = 0xFF00;
     std::vector<Docked> docked_;
-};
-
-class MdiChild : public Window {
-public:
-    // Registers `className` (once per process) and creates the child in
-    // `parentFrame`'s MDICLIENT. Null on failure.
-    HWND CreateChild(MdiFrame& parentFrame, const wchar_t* className, const wchar_t* title,
-                     DWORD style = WS_OVERLAPPEDWINDOW, int x = CW_USEDEFAULT, int y = CW_USEDEFAULT,
-                     int cx = CW_USEDEFAULT, int cy = CW_USEDEFAULT, HICON icon = nullptr);
-
-    MdiFrame* frame() const noexcept { return frame_; }
-
-protected:
-    LRESULT DefaultProc(UINT msg, WPARAM wp, LPARAM lp) override;
-    // Reports WM_MDIACTIVATE to the frame; an override must call this first.
-    bool OnMessage(UINT msg, WPARAM wp, LPARAM lp, LRESULT& result) override;
-
-private:
-    MdiFrame* frame_ = nullptr;
 };
 
 } // namespace win32fx

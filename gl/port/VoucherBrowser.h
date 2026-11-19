@@ -21,4 +21,4 @@
 #include "win32fx.h"
 
 // Opens the voucher list in `frame`, or activates the one already open.
-void OpenVoucherBrowser(fx::MdiFrame& frame);
+void OpenVoucherBrowser(fx::PageHost& frame);

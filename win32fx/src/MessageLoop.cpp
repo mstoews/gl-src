@@ -15,7 +15,15 @@ std::vector<HWND>& modeless()
     static std::vector<HWND> v;
     return v;
 }
+KeyFilter& keyFilter()
+{
+    static KeyFilter f = nullptr;
+    return f;
+}
 } // namespace
+
+void SetKeyFilter(KeyFilter filter) { keyFilter() = filter; }
+KeyFilter CurrentKeyFilter() { return keyFilter(); }
 
 void AddModeless(HWND dialog)
 {
@@ -31,6 +39,7 @@ void RemoveModeless(HWND dialog)
 
 bool PreTranslate(MSG& msg, HWND frame, HWND mdiClient, HACCEL accel)
 {
+    if (KeyFilter f = keyFilter(); f && f(msg)) return true;
     if (mdiClient && TranslateMDISysAccel(mdiClient, &msg)) return true;
     if (accel && frame && TranslateAcceleratorW(frame, accel, &msg)) return true;
     const std::vector<HWND> dialogs = modeless();   // a dialog may close while handling the message

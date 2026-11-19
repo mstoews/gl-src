@@ -12,6 +12,7 @@
 #include "ArInvoiceEntry.h"
 #include "ArPosting.h"
 #include "ArReceipts.h"
+#include "Commands.h"
 #include "Company.h"
 #include "ChartOfAccounts.h"
 #include "FixedAssetTypes.h"
@@ -50,7 +51,6 @@
 namespace {
 
 constexpr int kWindowMenuPos = 7;            // TManilaGL: ChildMenuPos = 7
-constexpr wchar_t kGleProp[] = L"GL.UseGle";
 
 // Which stub each menu command outside Spec #1 goes to. The command IDs and
 // handler names are TGlWindow's and TManilaGL's response tables
@@ -89,17 +89,6 @@ template <size_t N>
 bool contains(const WORD (&list)[N], WORD id)
 {
     return std::find(std::begin(list), std::end(list), id) != std::end(list);
-}
-
-int findPopup(HMENU menu, const wchar_t* text)
-{
-    const int n = GetMenuItemCount(menu);
-    for (int i = 0; i < n; ++i) {
-        wchar_t buf[64] = {};
-        GetMenuStringW(menu, static_cast<UINT>(i), buf, 64, MF_BYPOSITION);
-        if (wcscmp(buf, text) == 0) return i;
-    }
-    return -1;
 }
 
 // ---- the top toolbar --------------------------------------------------------
@@ -145,12 +134,12 @@ const ToolButton kToolButtons[] = {
 HWND ManilaGL::Create(HINSTANCE inst)
 {
     // TGlWindow::GetClassName: "GLWindow"; GetWindowClass: icon "GL".
-    return CreateFrame(inst, L"GLWindow", szApp, HGLMenu, kWindowMenuPos, LoadIconW(inst, L"GL"));
+    return CreateWorkspace(inst, L"GLWindow", szApp, HGLMenu, kWindowMenuPos, LoadIconW(inst, L"GL"));
 }
 
 bool ManilaGL::OnCreate(LPCREATESTRUCTW cs)
 {
-    MdiFrame::OnCreate(cs);
+    Workspace::OnCreate(cs);
 
     // TGlWindow::SetupWindow: the toolbar (1032) and the module bar (2057),
     // now the standard controls (UI refresh spec 4.3, 4.4). The status bar is
@@ -164,8 +153,7 @@ bool ManilaGL::OnCreate(LPCREATESTRUCTW cs)
     }
     Dock(toolbar_, fx::DockSide::Top, toolbar_.Height());
 
-    // TGLClient::WMRButtonDown: a right-click on the client opens GLSUB.
-    SetWindowSubclass(mdiClient(), ClientProc, 1, reinterpret_cast<DWORD_PTR>(this));
+    BuildNavigation();
 
     // TManilaGL::SetupWindow. ID_GL isn't in gl_new.rc's MANILA; kept for parity.
     CheckMenuItem(HGLMenu, ID_GL, MF_BYCOMMAND | MF_CHECKED);
@@ -194,7 +182,7 @@ void ManilaGL::OnDpiChanged(UINT)
 
 bool ManilaGL::OnSize(UINT type, int cx, int cy)
 {
-    MdiFrame::OnSize(type, cx, cy);
+    Workspace::OnSize(type, cx, cy);
     if (!status_.hwnd()) return true;
     // TGlWindow::WMSize's layout: company on the left (200 px at 96 DPI),
     // period on the right (100 px), menu help between them.
@@ -223,10 +211,16 @@ bool ManilaGL::OnCommand(WORD id, WORD code, HWND ctl)
 {
     // Toolbar clicks are commands, as TToolBar::Mssg sent them (lParam 0).
     if (ctl && ctl == toolbar_.hwnd()) ctl = nullptr;
-    if (MdiFrame::OnCommand(id, code, ctl)) return true;   // Window menu, CM_EXIT
+    if (Workspace::OnCommand(id, code, ctl)) return true;   // Window menu, CM_EXIT
+    // A command the rights deny doesn't run, wherever it came from (a key, the toolbar).
+    if (!ctl && id != ID_SYSACCESS && !MayRun(id)) {
+        MessageBeep(MB_OK);
+        return true;
+    }
     switch (id) {
     case ID_SYSACCESS:                     // TManilaGL::GLSysAccess (posted at startup)
         if (RunLogin(hwnd()) != IDOK) PostMessageW(hwnd(), WM_COMMAND, fx::CM_EXIT, 0);
+        ApplyRights();                     // the user's menu code
         return true;
     case ID_ACCESS:                        // Maintenance > User Access
         RunUserAdministration(hwnd());
@@ -354,7 +348,11 @@ bool ManilaGL::OnCommand(WORD id, WORD code, HWND ctl)
         RunBackup(hwnd());
         return true;
     case ID_RESTORE:                       // TGlWindow::GLRestore: Restore Databases
-        if (RunRestore(hwnd())) RefreshStatus();   // the restored company's name and period
+        if (RunRestore(hwnd())) {
+            RefreshStatus();                   // the restored company's name and period
+            rights_.reset();                   // and its accessm
+            ApplyRights();
+        }
         return true;
     case ID_REINDEX:                       // TGlWindow::GLReindex: Reindex Databases
         RunReindex(hwnd());
@@ -486,27 +484,13 @@ void ManilaGL::NotPorted(WORD id)
     }
 }
 
-bool ManilaGL::OnMessage(UINT msg, WPARAM wp, LPARAM lp, LRESULT&)
+bool ManilaGL::OnMessage(UINT msg, WPARAM wp, LPARAM lp, LRESULT& result)
 {
+    if (Workspace::OnMessage(msg, wp, lp, result)) return true;   // tabs, navigation, the Window menu's pages
     switch (msg) {
-    case WM_INITMENUPOPUP: {   // TManilaGL::WMInitMenuPopup
-        HMENU menu = GetMenu(hwnd());
-        ApplyMenuAccess(menu);
-        // Statement Layout is behind the Chart of Accounts' access (spec #3 6.4).
-        if (menu)
-            EnableMenuItem(menu, CM_STATEMENT_LAYOUT,
-                           MF_BYCOMMAND | ((GetMenuState(menu, ID_ACCTADD, MF_BYCOMMAND) & MF_GRAYED) ? MF_GRAYED : MF_ENABLED));
-        // Recover Purchase / Sales Voucher are behind Recover General Ledger Voucher's access.
-        if (menu)
-            for (UINT id : {CM_AP_RECOVER, CM_AR_RECOVER})
-                EnableMenuItem(menu, id,
-                               MF_BYCOMMAND | ((GetMenuState(menu, ID_GLREPBATCH, MF_BYCOMMAND) & MF_GRAYED) ? MF_GRAYED : MF_ENABLED));
-        // The voucher list opens Voucher Entry: behind its access.
-        if (menu)
-            EnableMenuItem(menu, CM_VOUCHER_LIST,
-                           MF_BYCOMMAND | ((GetMenuState(menu, ID_MODBATCH, MF_BYCOMMAND) & MF_GRAYED) ? MF_GRAYED : MF_ENABLED));
-        return false;        // DefFrameProc too
-    }
+    case WM_INITMENUPOPUP:   // TManilaGL::WMInitMenuPopup: the rights, as ApplyMenuAccess and its follow-ons did
+        ApplyRights();
+        return false;
     case WM_MENUSELECT:
         MenuHelp(wp, lp);
         return false;
@@ -538,16 +522,45 @@ void ManilaGL::PopUpMenu(POINT screen)
         TrackPopupMenu(popup, TPM_LEFTBUTTON, screen.x, screen.y, 0, hwnd(), nullptr);
 }
 
-LRESULT CALLBACK ManilaGL::ClientProc(HWND h, UINT msg, WPARAM wp, LPARAM lp, UINT_PTR id, DWORD_PTR ref)
+void ManilaGL::OnPageAreaContextMenu(POINT screen)
 {
-    if (msg == WM_RBUTTONDOWN) {
-        POINT pt{static_cast<short>(LOWORD(lp)), static_cast<short>(HIWORD(lp))};
-        ClientToScreen(h, &pt);
-        reinterpret_cast<ManilaGL*>(ref)->PopUpMenu(pt);
-        return 0;
+    PopUpMenu(screen);   // TGLClient::WMRButtonDown: GLSUB
+}
+
+// ---- the command table: navigation and rights (spec #8 8) ------------------------------
+
+void ManilaGL::BuildNavigation()
+{
+    ClearNavigation();
+    std::vector<HTREEITEM> open;   // open[d]: the group rows at depth d go into
+    bool skipping = false;         // inside the Window menu
+    for (const cmd::MenuRow& r : cmd::MenuRows()) {
+        if (r.depth == 0) skipping = r.kind == cmd::Kind::Popup && cmd::PlainText(r.text) == L"Window";
+        if (skipping || r.kind == cmd::Kind::Separator) continue;
+        open.resize(static_cast<size_t>(r.depth));
+        HTREEITEM parent = open.empty() ? TVI_ROOT : open.back();
+        if (r.kind == cmd::Kind::Popup) open.push_back(AddNavItem(parent, cmd::PlainText(r.text), 0));
+        else AddNavItem(parent, cmd::PlainText(r.text), r.id);
     }
-    if (msg == WM_NCDESTROY) RemoveWindowSubclass(h, ClientProc, id);
-    return DefSubclassProc(h, msg, wp, lp);
+}
+
+bool ManilaGL::MayRun(WORD id)
+{
+    if (!rights_) rights_ = cmd::Rights::Load(cb);
+    return rights_->MayRun(id, szMsg);
+}
+
+bool ManilaGL::IsCommandEnabled(WORD id) const
+{
+    return const_cast<ManilaGL*>(this)->MayRun(id);
+}
+
+void ManilaGL::ApplyRights()
+{
+    if (HMENU menu = GetMenu(hwnd()))
+        for (cmd::Id id : cmd::CommandIds()) EnableMenuItem(menu, id, MF_BYCOMMAND | (MayRun(id) ? MF_ENABLED : MF_GRAYED));
+    for (const ToolButton& b : kToolButtons) toolbar_.EnableCommand(toolbarCommand(b.id), MayRun(toolbarCommand(b.id)));
+    RefreshNavigation();
 }
 
 bool ManilaGL::OnDestroy()
@@ -555,30 +568,5 @@ bool ManilaGL::OnDestroy()
     // Detach the menu so the frame doesn't destroy it: wWinMain owns
     // MANILA, GLE and GLSUB and destroys all three (~TAcctModule).
     SetMenu(hwnd(), nullptr);
-    return MdiFrame::OnDestroy();
-}
-
-void ManilaGL::UseGleMenu(HWND child)
-{
-    SetPropW(child, kGleProp, reinterpret_cast<HANDLE>(1));
-}
-
-void ManilaGL::ReleaseGleMenu(HWND child)
-{
-    RemovePropW(child, kGleProp);
-}
-
-void ManilaGL::OnMdiChildActivate(HWND child)
-{
-    // The swap gl_xls.cpp's TWorksheet::WMMDIActivate made: GLE while a
-    // child that asked for it is active, MANILA otherwise. The original
-    // passed submenu 0 (File) as the Window menu; this passes each menu's
-    // Window popup, so the child list stays in the Window menu.
-    const bool gle = child && GetPropW(child, kGleProp);
-    HMENU menu = gle ? HGLExMenu : HGLMenu;
-    if (!menu || GetMenu(hwnd()) == menu) return;
-    const int pos = gle ? findPopup(menu, L"&Window") : kWindowMenuPos;
-    SendMessageW(mdiClient(), WM_MDISETMENU, reinterpret_cast<WPARAM>(menu),
-                 reinterpret_cast<LPARAM>(pos >= 0 ? GetSubMenu(menu, pos) : nullptr));
-    DrawMenuBar(hwnd());
+    return Workspace::OnDestroy();
 }

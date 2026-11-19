@@ -550,20 +550,3 @@ void RunUserAdministration(HWND frame)
     UserAdministration dlg;
     dlg.DoModal(1159, frame);
 }
-
-void ApplyMenuAccess(HMENU menu)
-{
-    if (bMenuSetup || !menu) return;
-    Data4 accessm(cb, "accessm");
-    if (accessm.isValid()) {
-        accessm.SetIndex("menu");
-        accessm.top();
-        Field4 MenuID(accessm, 4);
-        for (const char* t = szMsg; *t != '\0' && !accessm.eof(); ++t, accessm.skip()) {
-            const UINT iMenuID = static_cast<UINT>(static_cast<long>(Str4ptr(MenuID.str())));
-            EnableMenuItem(menu, iMenuID, MF_BYCOMMAND | (*t == '1' ? MF_GRAYED : MF_ENABLED));
-        }
-        accessm.close();
-    }
-    bMenuSetup = TRUE;
-}

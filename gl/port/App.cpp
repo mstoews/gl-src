@@ -60,6 +60,7 @@
 #include "Vouchers.h"   // SetPostFault
 #include "Globals.h"
 #include "Ini.h"
+#include "CommandsMenu.h"
 #include "ManilaGL.h"
 #include "PortIds.h"
 #include "ResourceCheck.h"
@@ -193,7 +194,8 @@ int WINAPI wWinMain(_In_ HINSTANCE inst, _In_opt_ HINSTANCE, _In_ LPWSTR cmdLine
     }
 
     // ~TAcctModule destroyed these; the frame detaches MANILA before it goes.
-    fx::MenuGuard manila(LoadMenuW(inst, L"MANILA"));
+    // MANILA from the command table (spec #8 8); /checkres proves it is the resource's.
+    fx::MenuGuard manila(BuildCommandMenu());
     fx::MenuGuard gle(LoadMenuW(inst, L"GLE"));
     fx::MenuGuard glsub(LoadMenuW(inst, L"GLSUB"));
     if (!manila || !gle || !glsub) return fail(L"The menus could not be loaded.");
@@ -214,7 +216,7 @@ int WINAPI wWinMain(_In_ HINSTANCE inst, _In_opt_ HINSTANCE, _In_ LPWSTR cmdLine
                 // After the login the frame posted at creation, if there is one.
                 if (args.find(L"/samplereport") != std::wstring::npos)
                     PostMessageW(frame, WM_COMMAND, CM_SAMPLE_REPORT, 0);
-                rc = fx::RunMessageLoop(frame, frame.mdiClient());
+                rc = fx::RunMessageLoop(frame);
             }
         }
     }
