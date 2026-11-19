@@ -2,7 +2,7 @@
 
 **Spec reference:** `gl/docs/superpowers/specs/2026-11-19-owl-to-win32-sdk-port-spec8-design.md`
 **Date:** 2026-11-19
-**Plan status:** In progress (S8-M0 to M2 built)
+**Plan status:** In progress (S8-M0 to M3 built)
 
 **Paths:** relative to the repository root. The shell today is `gl/port/ManilaGL.{h,cpp}` on `win32fx/include/MdiFrame.h`, with the menu, toolbar and status bar from `gl/res/gl.rc` (made by `gl/res/tools/prune_rc.py`) and `win32fx/include/Toolbar.h` / `StatusBar.h`. Screens are `MainDialog` subclasses in `gl/port/`. New framework code goes in `win32fx/` (`Workspace`, `Page`, `Layout`, the controls), the command table in `gl/port/Commands.{h,cpp}`, pages in `gl/port/pages/`, and page templates in `gl/res/port.rc` with their IDs in `gl/port/PortIds.h`.
 
@@ -343,6 +343,54 @@ S is less than a day, M is 1–3 days, L is 3–6 days. **Parallel work:** M2, M
 ---
 
 ## Milestone 3 — The entry grid and the voucher pages
+
+> **As built (2026-11-19; built and run on Windows 11, VS 18, v145).**
+> - **The entry grid** (task 2):
+>   - **`model::EntryGridModel`** (`win32fx/include/model/EntryGridModel.h`, portable): rows of typed text, a blank row always at the end, and the current cell. It owns the key table: Tab and Enter (Q3) move on; Shift+Tab back; Up and Down; F2 edits keeping the text; a typed key edits from empty; Esc cancels an edit and otherwise does nothing; Insert, Ctrl+Delete and Ctrl+Z (undoing removed rows, the last first). It also checks cells on commit (by kind, then the column's validator), keeps totals in cents, says whether a voucher balances, and notifies the page (`OnCommit`, `OnChanged`).
+>   - **`fx::EntryGrid`** (`win32fx/include/EntryGrid.h`): a report ListView on the form, owner-data, showing the model.
+>     - **Editing:** an edit is made over the cell for each edit, with an `fx::Lookup` when the column has one. Clicking a cell selects it; a double-click edits it.
+>     - **Drawing:** the current cell and row are highlighted (custom draw).
+>     - **Focus:** focus moving to another control commits the edit (or drops a refused one); another application taking the focus leaves it as it is.
+>     - **Deviation:** it is a plain ListView, not `fx::Grid`, whose tbSpread editing would have fought the model's keys.
+>   - **No separate test page:** `/stress` types through the GL voucher page's grid with `EntryGrid::Type` and `Press` instead, covering every key.
+> - **The GL voucher page** (task 3; `pages/GlVoucherModel.{h,cpp}`, `pages/VoucherPages.cpp`, `IDD_PG_GLVOUCHER`):
+>   - **The form:** the header (date, period, cheque, description) and the grid: account, dept, document, the account's name (filled from the chart), debit, credit, med rep, product and doctor, with lookups. Below are the totals, the difference and "Balanced." or "Out of balance by ...".
+>   - **Save** checks what Voucher Entry checks: a description, a date, an open period, and per line a document, an account and dept in the chart, and a debit or a credit but not both. It then writes through `SaveLine` and `DeleteLine`, the calls Voucher Entry makes.
+>   - **Post** is shown only while the voucher balances in an open period. It saves first, asks in a task dialog, then calls `PostVoucher`.
+>   - **Navigation:** Previous and Next (Ctrl+PgUp and Ctrl+PgDn) move between the open vouchers.
+>   - **Prior Period Entry** opens the same page in adjustment mode (mode "3"; only adjustments open).
+>   - **No memo:** GL vouchers have no memo field. The memo is on the sales voucher page.
+> - **The voucher list** (task 4, `IDD_PG_VOUCHERLIST`): open and adjustment vouchers, and posted ones with a check box, filtered as you type. Open (or a double-click) opens the voucher's page in its own tab. It replaces the M0 browser for Transactions > Voucher List; `VoucherBrowser.cpp` is no longer reached.
+> - **AP and AR** (task 5; `pages/SubledgerModels.{h,cpp}`):
+>   - **The purchase and cash voucher page** (`IDD_PG_APVOUCHER`): expense lines in the grid. The vendor (a lookup) fills its accounts, rates, terms and type. The voucher's lines as they will be saved (expense, VAT, W/H and the AP or bank line, `ComputeVoucher`) show under the grid with the totals. Save runs Invoice Entry's checks in order, the duplicate invoice among them (in the information bar), and writes through `SaveExpenseLine`. Cash vouchers show the bank and cheque instead of the AP account, due date and terms.
+>   - **The sales voucher page** (`IDD_PG_ARINVOICE`): product lines with a quantity and price, or an amount. The customer fills the accounts, VAT and terms; the split shows through `ComputeSale`. It saves through `SaveSaleLine`, with the memo beside the lines (`SaveArMemo`).
+>   - **The receipts page** (`IDD_PG_RECEIPTS`): the open invoices on the left, filtered. On the right, the receipt: date, bank, amount, and "Discount the rest". It records through `RecordReceipt`.
+> - **Commands:** General Ledger Voucher (10076, 1007), Prior Period Entry (8081), Voucher List, Purchase Invoice (4044), Cash Invoice (1079), Sales Invoice (5045) and Clear Receipts (4054) open pages. Each dialog stays as a "(classic)" entry (`CM_*_CLASSIC`, 20518 to 20523), following the page's right.
+> - **`/checkres`, `/stress`** (task 6): `/checkres` checks the five forms. `/stress` opens each page 25 times, types five lines (on the GL page through the grid's keys and editor: Tab, F2, Esc, Insert, Ctrl+Delete, Ctrl+Z), and closes it without saving.
+> - **Tests** (task 7): `gl_tests` 203.
+>   - `test_grid.cpp`, 4 cases: every key in every column kind, validation, totals in cents, balancing, undo.
+>   - `test_voucher_pages.cpp`, 4 cases, each compared table by table with the classic screen's calls on a second fixture copy:
+>     - **Spec #2:** a five-line voucher typed through the grid's keys, saved and posted. `gl_btch`, `gl_btchd`, `gl_dist` and `glaccts` are the same. The refusals, editing (a removed line), the modes and navigation are covered too.
+>     - **Spec #5:** V001's invoice with VAT 12 and W/H 1. The split is VAT 180.00, W/H 15.00 and AP 1,665.00; the duplicate is refused; `ap_btch`, `ap_btchd`, `ap_linex`, `ap_dist` and `ap_jsum` are the same.
+>     - **Spec #6:** voucher 7, 3 x 1,100.00 (Cr 3,000.00, Cr 300.00, Dr 3,300.00), posted, then its receipts: 1,000.00, then 2,200.00 with a discount of 100.00. The `ar_*` tables are the same.
+> - **Checked:**
+>   - Debug and Release `/W4 /WX` clean; the suites pass in both; `/checkres` 0 in both; `/stress` 0 in both.
+>   - Driven in the app on a scratch copy, by messages to its own windows (characters and keys posted to the grid and its editor, no global keystrokes):
+>     - **The exit criterion:** a five-line GL voucher typed with keys only. The totals moved with each line and Post appeared once it balanced. A cell with 999999 was refused ("Not an account in the chart.") and Esc dropped it. Saved as voucher 104 (`gl_btchd` read back with the chart's names) and posted: `gl_dist` has 5 rows, 350.00 each side.
+>     - **Navigation:** Previous showed voucher 102 out of balance by 10.00, with Post hidden.
+>     - **The voucher list** opened voucher 101 in its own tab.
+>     - **Purchase voucher:** V001 filled VAT 12 and W/H 1; a line of 1,120.00 showed VAT 120.00, W/H 10.00 and owed 1,110.00, and saved as voucher 7.
+>     - **Sales voucher 7:** C001 with three lines of 1,100.00 showed 3,300.00 each side and VAT 300.00, and was saved with its memo and posted.
+>     - **Receipts:** 1,000.00 recorded against S-1007, leaving 2,300.00 owed.
+>
+>     Screenshots checked the GL, AP and AR pages.
+> - **Fixed while driving:**
+>   - Typing a vendor or customer copied it into the model on each key, so leaving the field never loaded its details.
+>   - The receipts list and the voucher list didn't refresh when their tab came back: the workspace shows a page with `SWP_SHOWWINDOW`, which sends no `WM_SHOWWINDOW`.
+> - **Not driven:**
+>   - a lookup's list, and Ctrl+PgUp itself (the drive pressed Previous);
+>   - a cash voucher's save, and AP and AR posting (the tests cover them);
+>   - Delete on the voucher pages.
 
 **Goal:** vouchers are typed into a grid, with live totals, on pages.
 
