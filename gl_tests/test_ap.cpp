@@ -16,6 +16,7 @@
 
 #include "Ap.h"
 #include "Vouchers.h"
+#include "pages/TaskModels.h"   // the Cheques and Bank Reconciliation pages (spec #9 S9-M5)
 #include "reports/ApReports.h"
 #include "reports/ReportContext.h"
 
@@ -1525,16 +1526,65 @@ TEST_CASE("The Spec #5 acceptance walkthrough's figures", "[ap][acceptance]")
     // 7. The cheque report holds 5002; renumber it 5003; confirm.
     CHECK(LoadChequesIn(db.code, ap_payment::kPaid).size() == 1);
     CHECK(AmountInWords(222000) == "Two thousand two hundred twenty and 00/100");
-    CHECK(RenumberCheque(db.code, 5002, 5003) == RenumberResult::Renumbered);
-    CHECK(ConfirmPrinted(db.code, 5003, 5003) == 1);
+    // 7 and 8 run twice, each time after 1-6 on a fresh copy: through the classic
+    // screens' calls, and on the Spec #9 pages (S9-M5). Both lead to the same tables.
+    SECTION("7 and 8 through the classic screens' calls")
+    {
+        CHECK(RenumberCheque(db.code, 5002, 5003) == RenumberResult::Renumbered);
+        CHECK(ConfirmPrinted(db.code, 5003, 5003) == 1);
 
-    // 8. Clear 5003 on 10/31/26; void 5001 on 10/31/26 (transferred: reversed); transfer again.
-    CHECK(ClearCheque(db.code, 5003, "20261031") == ClearResult::Cleared);
-    const VoidOutcome vo = VoidCheque(db.code, 5001, "20261031");
-    CHECK(vo.result == VoidResult::Voided);
-    CHECK(vo.itemsReopened == 1);
-    CHECK(vo.rowsRemoved == 0);
-    CHECK(vo.rowsReversed == 2);
+        // 8. Clear 5003 on 10/31/26; void 5001 on 10/31/26 (transferred: reversed); transfer again.
+        CHECK(ClearCheque(db.code, 5003, "20261031") == ClearResult::Cleared);
+        const VoidOutcome vo = VoidCheque(db.code, 5001, "20261031");
+        CHECK(vo.result == VoidResult::Voided);
+        CHECK(vo.itemsReopened == 1);
+        CHECK(vo.rowsRemoved == 0);
+        CHECK(vo.rowsReversed == 2);
+    }
+    SECTION("7 and 8 on the Cheques and Bank Reconciliation pages (spec #9 S9-M5)")
+    {
+        // 7. The Cheques page lists 5002. Renumber it 5001: refused; 5003: done. Then confirm it.
+        auto cheques = MakeChequesTask();
+        std::vector<TaskRow> rows = cheques->Load(db.code);
+        REQUIRE(rows.size() == 1);
+        CHECK(rows[0].key == 5002);
+        CHECK(rows[0].cells[3] == "2,220.00");
+        cheques->rowInput = "5001";
+        TaskStep s = cheques->RunRowAction(db.code, rows[0]);
+        CHECK_FALSE(s.ok);
+        CHECK(s.note == "Cheque number 5001 has already been used.");
+        cheques->rowInput = "5003";
+        s = cheques->RunRowAction(db.code, rows[0]);
+        CHECK(s.ok);
+        CHECK(s.note == "Cheque 5002 is now cheque 5003. Print it again.");
+        rows = cheques->Load(db.code);
+        REQUIRE(rows.size() == 1);
+        CHECK(rows[0].key == 5003);
+        TaskRun run = RunTask(*cheques, db.code, rows);
+        CHECK(run.message == "1 cheque done.");
+        CHECK(rows[0].note == "Confirmed printed.");
+        CHECK(cheques->Load(db.code).empty());
+        // "Renumber is now refused for it"
+        CHECK(RenumberCheque(db.code, 5003, 5004) != RenumberResult::Renumbered);
+
+        // 8. Bank Reconciliation lists 5001 and 5003. Date 10/31/26: clear 5003, void 5001.
+        auto reconcile = MakeBankReconciliationTask();
+        reconcile->option = "20261031";
+        rows = reconcile->Load(db.code);
+        REQUIRE(rows.size() == 2);
+        CHECK(rows[0].key == 5001);
+        CHECK(rows[1].key == 5003);
+        rows[1].checked = true;
+        run = RunTask(*reconcile, db.code, rows);
+        CHECK(rows[1].note == "Cleared 10/31/2026.");
+        rows = reconcile->Load(db.code);   // "It leaves the list"
+        REQUIRE(rows.size() == 1);
+        CHECK(rows[0].key == 5001);
+        s = reconcile->RunRowAction(db.code, rows[0]);
+        CHECK(s.ok);
+        CHECK(s.note == "Cheque 5001 voided: 1 invoice(s) open again; 0 journal row(s) removed, 2 reversed.");
+        CHECK(reconcile->Load(db.code).empty());
+    }
     CHECK(shell(db.code, "select trim(account), debit, credit, date, trim(mode) from ap_jsum where _deleted=0 and trim(cheque)='5001' order by _rowid") == std::vector<std::string>{"221002|1200.0|0.0|20261015|2", "102101|0.0|1200.0|20261015|2", "221002|0.0|1200.0|20261031|1", "102101|1200.0|0.0|20261031|1"});
     CHECK(shell(db.code, "select cheque, trim(cleared), trim(reference) from ap_reqst where _deleted=0 order by cheque") == std::vector<std::string>{"5003|0|Cleared 20261031"});
     const ApTransferResult t2 = TransferAp(db.code, 99);
