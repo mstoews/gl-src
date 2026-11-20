@@ -3,6 +3,8 @@
 //
 #include "Page.h"
 
+#include "Accessibility.h"
+
 #include "Ask.h"
 #include "MessageLoop.h"
 #include "StringUtil.h"
@@ -57,6 +59,7 @@ bool Page::OnCreate(LPCREATESTRUCTW cs)
         Filling f(*this);
         if (!OnInitPage()) return false;
     }
+    NameUnnamedControls(form_);   // spec #8 12: every control a screen reader can name
     layout_.Capture(form_, anchors_);
     ShowWindow(form_, SW_SHOW);
     return false;   // DefWindowProc too
@@ -69,7 +72,10 @@ void Page::SetAnchors(std::vector<std::pair<int, unsigned>> anchors)
 
 bool Page::OnDestroy()
 {
-    if (form_) RemoveModeless(form_);
+    if (form_) {
+        ClearAccessibleNames(form_);
+        RemoveModeless(form_);
+    }
     return false;
 }
 

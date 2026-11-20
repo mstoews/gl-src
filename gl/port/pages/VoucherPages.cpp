@@ -391,6 +391,7 @@ protected:
     {
         SetAnchors(kGlAnchors);
         AttachGrid(model_.grid());
+        fx::SetAccessibleName(Item(IDC_VP_GRID), L"Voucher lines");   // spec #8 12
         grid_.SetLookup(0, &model_.accounts());
         grid_.SetLookup(6, &model_.reps());
         grid_.SetLookup(7, &model_.products());
@@ -606,6 +607,7 @@ protected:
     {
         SetAnchors(kApAnchors);
         AttachGrid(model_.grid());
+        fx::SetAccessibleName(Item(IDC_VP_GRID), model_.kind() == ApKind::Cash ? L"Cash voucher lines" : L"Expense lines");   // spec #8 12
         grid_.SetLookup(0, &model_.lookups().accounts);
         grid_.SetLookup(4, &model_.lookups().reps);
         grid_.SetLookup(5, &model_.lookups().products);
@@ -862,6 +864,7 @@ protected:
     {
         SetAnchors(kArAnchors);
         AttachGrid(model_.grid());
+        fx::SetAccessibleName(Item(IDC_VP_GRID), L"Sales lines");   // spec #8 12
         grid_.SetLookup(0, &model_.lookups().products);
         grid_.SetLookup(1, &model_.lookups().accounts);
         grid_.SetLookup(7, &model_.lookups().reps);
@@ -1074,6 +1077,7 @@ protected:
     {
         SetAnchors(kReceiptsAnchors);
         list_ = Item(IDC_RCP_LIST);
+        fx::SetAccessibleName(list_, L"Open invoices");
         addColumns(list_, {{L"Customer", 64}, {L"Name", 120}, {L"Invoice", 70}, {L"Due", 72}, {L"Owed", 90}}, 4);
         SendDlgItemMessageW(form(), IDC_RCP_FILTER, EM_SETCUEBANNER, TRUE, reinterpret_cast<LPARAM>(L"Filter by customer or invoice"));
         model_.Load(false);
@@ -1238,6 +1242,7 @@ protected:
     {
         SetAnchors(kListAnchors);
         list_ = Item(IDC_VL_LIST);
+        fx::SetAccessibleName(list_, L"Vouchers");
         addColumns(list_, {{L"Voucher", 64}, {L"Date", 80}, {L"Period", 50}, {L"Description", 260}, {L"Debits", 100},
                            {L"Credits", 100}, {L"State", 140}},
                    4);

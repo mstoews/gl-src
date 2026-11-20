@@ -64,6 +64,8 @@
     <ClInclude Include="include\model\EntryGridModel.h" />
     <ClInclude Include="include\Job.h" />
     <ClInclude Include="include\model\JobState.h" />
+    <ClInclude Include="include\Accessibility.h" />
+    <ClInclude Include="include\model\FrameLook.h" />
     <ClInclude Include="include\controls\CustomControls.h" />
     <ClInclude Include="include\controls\Grid.h" />
     <ClInclude Include="src\Internal.h" />
@@ -92,6 +94,7 @@
     <ClCompile Include="src\model\EntryGridModel.cpp" />
     <ClCompile Include="src\Job.cpp" />
     <ClCompile Include="src\model\JobState.cpp" />
+    <ClCompile Include="src\Accessibility.cpp" />
     <ClCompile Include="src\StatusBar.cpp" />
     <ClCompile Include="src\controls\Register.cpp" />
     <ClCompile Include="src\controls\EditRules.cpp" />

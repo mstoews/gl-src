@@ -135,6 +135,7 @@ protected:
     {
         SetAnchors(kAnchors);
         list_ = Item(IDC_TK_LIST);
+        fx::SetAccessibleName(list_, wide(model_->Title()) + L": what it acts on");
         SetWindowTheme(list_, L"Explorer", nullptr);
         ListView_SetExtendedListViewStyle(list_, LVS_EX_FULLROWSELECT | LVS_EX_DOUBLEBUFFER |
                                                      (model_->PerItem() ? LVS_EX_CHECKBOXES : 0));
@@ -156,7 +157,7 @@ protected:
             c.pszText = const_cast<wchar_t*>(L"Note");
             ListView_InsertColumn(list_, i, &c);
         }
-        SetDlgItemTextW(form(), IDC_TK_ACTION, wide(model_->Action()).c_str());
+        SetDlgItemTextW(form(), IDC_TK_ACTION, (L"&" + wide(model_->Action())).c_str());   // an access key (spec #8 S8-M6)
         for (int id : {IDC_TK_ALL, IDC_TK_NONE}) ShowWindow(Item(id), model_->PerItem() ? SW_SHOW : SW_HIDE);
         const TaskOption opt = model_->Option();
         SetText(IDC_TK_LOPTION, model_->OptionLabel());

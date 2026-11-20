@@ -225,6 +225,7 @@ protected:
     {
         SetAnchors(kGalleryAnchors);
         list_ = Item(IDC_RG_LIST);
+        fx::SetAccessibleName(list_, L"Reports");
         SetWindowTheme(list_, L"Explorer", nullptr);
         ListView_SetExtendedListViewStyle(list_, LVS_EX_FULLROWSELECT | LVS_EX_DOUBLEBUFFER);
         const int dpi = static_cast<int>(GetDpiForWindow(list_));

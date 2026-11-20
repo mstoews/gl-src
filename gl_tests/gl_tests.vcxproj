@@ -98,6 +98,7 @@
     <ClCompile Include="test_voucher_pages.cpp" />
     <ClCompile Include="test_tasks.cpp" />
     <ClCompile Include="test_home.cpp" />
+    <ClCompile Include="test_frame.cpp" />
     <ClCompile Include="test_assets.cpp" />
     <!-- The portable gl/port sources under test (keep in step with tools/linux/build_tests.sh). -->
     <ClCompile Include="..\gl\port\Accounts.cpp" />
