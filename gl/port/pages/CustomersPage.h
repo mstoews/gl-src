@@ -11,11 +11,15 @@
 
 #include "win32fx.h"
 
+#include <string>
 #include <utility>
 #include <vector>
 
 // Opens the Customers page in `host`, or brings the open one forward.
 HWND OpenCustomersPage(fx::PageHost& host);
+
+// The Customers page shows customer `number` (command search).
+void ShowCustomer(HWND page, const std::string& number);
 
 // The form's anchors, for /checkres (every control says how it moves).
 const std::vector<std::pair<int, unsigned>>& CustomersPageAnchors();

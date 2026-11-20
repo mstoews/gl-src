@@ -452,7 +452,7 @@ bool Workspace::Key(const MSG& msg)
         SetNavigationVisible(!navVisible_);
         if (navVisible_ && nav_) SetFocus(nav_);
         return true;
-    default: return false;
+    default: return OnFrameShortcut(msg);
     }
 }
 

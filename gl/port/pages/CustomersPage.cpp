@@ -469,6 +469,14 @@ HWND OpenCustomersPage(fx::PageHost& host)
     return h;
 }
 
+void ShowCustomer(HWND page, const std::string& number)
+{
+    if (auto* p = dynamic_cast<CustomersPage*>(fx::Window::FromHandle(page))) {
+        p->Filter("");
+        p->SelectNumber(number);
+    }
+}
+
 const std::vector<std::pair<int, unsigned>>& CustomersPageAnchors()
 {
     return kAnchors;

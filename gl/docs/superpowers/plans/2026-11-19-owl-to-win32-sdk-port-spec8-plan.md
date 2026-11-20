@@ -2,7 +2,7 @@
 
 **Spec reference:** `gl/docs/superpowers/specs/2026-11-19-owl-to-win32-sdk-port-spec8-design.md`
 **Date:** 2026-11-19
-**Plan status:** In progress (S8-M0 to M4 built)
+**Plan status:** In progress (S8-M0 to M5 built)
 
 **Paths:** relative to the repository root. The shell today is `gl/port/ManilaGL.{h,cpp}` on `win32fx/include/MdiFrame.h`, with the menu, toolbar and status bar from `gl/res/gl.rc` (made by `gl/res/tools/prune_rc.py`) and `win32fx/include/Toolbar.h` / `StatusBar.h`. Screens are `MainDialog` subclasses in `gl/port/`. New framework code goes in `win32fx/` (`Workspace`, `Page`, `Layout`, the controls), the command table in `gl/port/Commands.{h,cpp}`, pages in `gl/port/pages/`, and page templates in `gl/res/port.rc` with their IDs in `gl/port/PortIds.h`.
 
@@ -557,6 +557,45 @@ S is less than a day, M is 1–3 days, L is 3–6 days. **Parallel work:** M2, M
 ---
 
 ## Milestone 5 — Reports, the home page, command search
+
+> **As built (2026-11-19; built and run on Windows 11, VS 18, v145).** Q5 is taken as the home page opening when nothing is pinned.
+> - **Portable models** (`pages/HomeModels.{h,cpp}`), compiled into `gl_tests` too:
+>   - **`LoadHomeFigures`** from the cores:
+>     - the period entry uses and the open periods;
+>     - GL, AP and AR vouchers waiting;
+>     - journal rows waiting for the transfer;
+>     - cheques made and not printed;
+>     - the period's depreciation (run or not, assets due);
+>     - AR and AP owed and overdue, counted as Open Receivables Detail and Open Payables Detail count them.
+>   - **`GalleryModel` and `LoadGalleryEntries`:** the Reporting menu's reports grouped by their submenu, plus the report items elsewhere (Chart of Accounts, Budget, the fixed-asset listings and the cheque reports), then gl_rptdef's. Search matches a word of the name first, then anywhere. Favourites, and Recent (eight), are kept as text in `GL_UISTATE` ("report.favourites", "report.recent").
+>   - **`SearchModel` and `LoadSearchItems`:** the commands with their menu paths (greyed ones left out), the accounts, customers, vendors and open GL vouchers. Ranking: an exact code, then a code prefix, then every query word starting a word of the label (more whole-word matches first), then anywhere; commands come before masters at a rank.
+> - **The home page** (task 6, `pages/HomePages.cpp`, `IDD_PG_HOME`, `CM_HOME`, the navigation pane's first item):
+>   - **Tiles:** eleven command links, each naming a figure and opening its page: GL voucher entry, the three posting tasks, Update AR and AP, Print Cheques, the depreciation run, Open Receivables, Open Payables, the gallery and search. Below them are the recent pages (kept as "recent" in `GL_UISTATE`) and the favourite reports.
+>   - **Refreshing:** it refreshes on the data-changed broadcast and when its tab is shown. It opens at the start when no page is pinned.
+> - **The report gallery** (task 2, `IDD_PG_GALLERY`):
+>   - **Custom Report** (`CM_REPORT_LIST`) opens it. The list (1022) stays as "Custom Report (classic)" (`CM_REPORT_LIST_CLASSIC`).
+>   - **The list:** grouped (Favourites, Recent, the menus, User reports), with search.
+>   - **Opening a report** runs it as its menu item does (its options dialog, then its preview in a tab); a user report runs through `RunUserReport`.
+>   - **Spec #7's New, Modify, Copy and Delete** follow the Report Writer right (`rw::MayDesignReports`).
+> - **Command search** (task 7): Ctrl+K (a new `Workspace::OnFrameShortcut` hook) opens a box over the frame. Typing filters; Up, Down and Enter choose; Esc or clicking away closes it.
+>   - **Choosing** a command runs it. An account or vendor opens its record page on that record (`ShowRecord`), a customer the Customers page (`ShowCustomer`), and a voucher its page (an adjustment's in adjustment mode).
+> - **Deferred, with the reason:**
+>   - **Options panels (task 3):** the options stay dialogs, before the preview and again from its Refresh (RunReport's rebuild). Turning some forty dialogs into child panels is its own piece of work.
+>   - **The designer as a page (task 5):** it stays the Spec #7 dialog.
+>   - **Task 4** was already in place: the preview has been a page since Spec #3 and M0, with Print, CSV, the page buttons and zoom.
+> - **`/checkres`, `/stress`** (task 8): `/checkres` checks the home and gallery forms. `/stress` refreshes the home page 100 times and opens, searches and closes the gallery 20 times. The 20 previews are the existing reports step (every report's preview opened and closed).
+> - **Tests** (task 9): `gl_tests` 214, 3 of them in `test_home.cpp`:
+>   - **The home figures:** AR owed equals Open Receivables Detail's total; AP owed equals Open Payables Detail's; waiting vouchers equal the posting lists; waiting journals equal the transfer's count. All of it still agrees after everything is posted.
+>   - **The gallery:** entries and groups, search, favourites and recent round-tripped as text.
+>   - **The search's ranking:** codes, words, commands before masters, greyed commands left out.
+> - **Checked:**
+>   - Debug and Release `/W4 /WX` clean; the suites pass in both; `/checkres` 0 in both; `/stress` 0 in both.
+>   - **Driven in the app** on a scratch copy:
+>     - With nothing pinned, the home page opened by itself. Its figures matched the database: 3 GL, 3 AP and 2 AR vouchers to post; 19 journal rows; 2,800.00 owed to us and 4,900.00 owed by us.
+>     - The GL tile opened Post GL vouchers. Posting two vouchers there turned the tile into "1 GL voucher to post".
+>     - The gallery listed 54 reports. "trial" found 2, and Trial Balance became a favourite (saved, and on the home page). Open showed its options dialog, and OK opened its preview in a new tab.
+>     - Ctrl+K's box found "hospital" and "C001": Enter opened the Customers page on C001. "depart codes" opened Departments, and Esc closed the box. The recent pages were saved on closing.
+> - **Fixed while driving:** a favourite rebuilt the gallery's list and lost the selection, so Open had nothing to open. The selection now stays on its report.
 
 **Goal:** reports open in tabs with their options beside them; the home page shows what needs doing; anything can be found with Ctrl+K.
 

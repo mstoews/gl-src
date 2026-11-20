@@ -65,6 +65,7 @@
 #include "pages/RecordPage.h"
 #include "pages/VoucherPages.h"
 #include "pages/TaskPages.h"
+#include "pages/HomePages.h"
 #include "ManilaGL.h"
 #include "PortIds.h"
 #include "ResourceCheck.h"
@@ -180,9 +181,10 @@ int WINAPI wWinMain(_In_ HINSTANCE inst, _In_opt_ HINSTANCE, _In_ LPWSTR cmdLine
         const int records = stressStep([] { return StressRecordPages(25); });      // S8-M2: the other pages
         const int voucherPages = stressStep([] { return StressVoucherPages(25); });   // S8-M3: the voucher pages
         const int taskPages = stressStep([] { return StressTaskPages(25); });         // S8-M4: the task pages, a dry job
-        const int pages = customers < 0 || records < 0 || voucherPages < 0 || taskPages < 0
+        const int homePages = stressStep([] { return StressHomePages(100); });       // S8-M5: home refreshed 100 times, the gallery
+        const int pages = customers < 0 || records < 0 || voucherPages < 0 || taskPages < 0 || homePages < 0
                               ? -1
-                              : customers + records + voucherPages + taskPages;
+                              : customers + records + voucherPages + taskPages + homePages;
         const int growth =
             (accounts < 0 || master < 0 || vouchers < 0 || posting < 0 || inquiry < 0 || reports < 0 || assets < 0 ||
              layout < 0 || ap < 0 || ar < 0 || designer < 0 || pages < 0)

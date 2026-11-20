@@ -49,6 +49,34 @@
 #define IDD_PG_VOUCHERLIST      20022
 // The task page's form and controls (spec #8 S8-M4, gl/res/taskpages.rc; 22400-22419).
 #define IDD_PG_TASK             20023
+// The home page and the report gallery (spec #8 S8-M5, gl/res/homepages.rc; 22500-22549).
+#define IDD_PG_HOME             20024
+#define IDD_PG_GALLERY          20025
+#define IDC_HM_HEADING          22500
+#define IDC_HM_REFRESH          22501
+#define IDC_HM_TILE0            22510   // ... IDC_HM_TILE10 22520: the tiles, command links
+#define IDC_HM_TILE1            22511
+#define IDC_HM_TILE2            22512
+#define IDC_HM_TILE3            22513
+#define IDC_HM_TILE4            22514
+#define IDC_HM_TILE5            22515
+#define IDC_HM_TILE6            22516
+#define IDC_HM_TILE7            22517
+#define IDC_HM_TILE8            22518
+#define IDC_HM_TILE9            22519
+#define IDC_HM_TILE10           22520
+#define IDC_HM_GRECENT          22521
+#define IDC_HM_RECENT           22522
+#define IDC_HM_GFAV             22523
+#define IDC_HM_FAVOURITES       22524
+#define IDC_RG_OPEN             22530
+#define IDC_RG_FAVOURITE        22531
+#define IDC_RG_NEW              22532
+#define IDC_RG_MODIFY           22533
+#define IDC_RG_COPY             22534
+#define IDC_RG_DELETE           22535
+#define IDC_RG_FILTER           22536
+#define IDC_RG_LIST             22537
 #define IDC_TK_ACTION           22400
 #define IDC_TK_STOP             22401
 #define IDC_TK_ALL              22402
@@ -342,6 +370,10 @@
 #define CM_TK_PURGEAR_CLASSIC       20539   // Purge Received Receivables (4062)
 #define CM_TK_CHEQUES_CLASSIC       20540   // Create Cheques (1057)
 #define CM_TK_BACKUP_CLASSIC        20541   // Backup Databases (1072)
+// Spec #8 S8-M5.
+#define CM_HOME                 20542   // the home page (the navigation pane's first item)
+#define CM_COMMAND_SEARCH       20543   // Ctrl+K: command search
+#define CM_REPORT_LIST_CLASSIC  20544   // Custom Report (classic): the report list, dialog 1022
 #define CM_RW_DESIGN            20507   // not a command: the "Report Writer" accessm row (rw::kDesignRightId; spec #7 D8, S7-M5)
 
 // ---- strings ---------------------------------------------------------------

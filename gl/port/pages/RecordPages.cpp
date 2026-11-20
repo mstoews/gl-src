@@ -137,6 +137,21 @@ public:
 
     // /stress
     void Filter(const std::string& text) { SetText(kPageFilter, text); }
+    // Command search: the record with `key`, asking about unsaved changes first.
+    bool ShowKey(const std::string& key)
+    {
+        if (!model_->isNew() && model_->key() == key) return true;
+        if (!SwitchAllowed()) return false;
+        HideInfo();
+        SetText(kPageFilter, "");
+        if (!model_->Select(key)) {
+            ShowInfo(fx::InfoKind::Warning, wide(key) + L" is no longer on file.");
+            return false;
+        }
+        Fill();
+        ShowList();
+        return true;
+    }
     void SelectShown(int row) { SelectRow(row); }
     int shownCount() const { return static_cast<int>(shown_.size()); }
 
@@ -681,6 +696,12 @@ protected:
 };
 
 } // namespace
+
+bool ShowRecord(HWND page, const std::string& key)
+{
+    auto* p = dynamic_cast<RecordPage*>(fx::Window::FromHandle(page));
+    return p && p->ShowKey(key);
+}
 
 bool IsRecordPageCommand(WORD command)
 {

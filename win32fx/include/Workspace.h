@@ -73,6 +73,8 @@ public:
 
     // ---- pages ----
     const std::vector<HWND>& pages() const noexcept { return pages_; }
+    // A Ctrl key the page and the workspace didn't take (Ctrl+K: command search). True if handled.
+    virtual bool OnFrameShortcut(const MSG& /*msg*/) { return false; }
     // Closes every page that may close (a dirty Page asks); false if one stayed.
     bool CloseAllPages();
     // The pinned pages' commands, in tab order.

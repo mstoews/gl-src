@@ -378,3 +378,6 @@ FONT 9, "Segoe UI"
 
 // ---- The task page (spec #8 S8-M4) ----
 #include "taskpages.rc"
+
+// ---- The home page and the report gallery (spec #8 S8-M5) ----
+#include "homepages.rc"

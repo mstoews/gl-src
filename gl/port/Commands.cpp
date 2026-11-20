@@ -99,6 +99,7 @@ Id RightOf(Id id)
     case CM_TK_PURGEAR_CLASSIC: return 4062;
     case CM_TK_CHEQUES_CLASSIC: return 1057;
     case CM_TK_BACKUP_CLASSIC: return 1072;
+    case CM_REPORT_LIST_CLASSIC: return CM_REPORT_LIST;   // S8-M5
     default: return id;
     }
 }
