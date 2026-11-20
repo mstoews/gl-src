@@ -15,6 +15,7 @@
 #include "Commands.h"
 #include "UiState.h"
 #include "pages/CustomersPage.h"
+#include "pages/RecordPage.h"
 #include "Company.h"
 #include "ChartOfAccounts.h"
 #include "FixedAssetTypes.h"
@@ -46,6 +47,7 @@
 #include <algorithm>
 #include <cstdio>
 #include <cstdlib>
+#include <map>
 #include <cstring>
 #include <exception>
 #include <iterator>
@@ -224,6 +226,14 @@ bool ManilaGL::OnCommand(WORD id, WORD code, HWND ctl)
         MessageBeep(MB_OK);
         return true;
     }
+    // The master screens that are pages (spec #8 S8-M2); their dialogs are the classic commands below.
+    static_assert(ID_ACCTADD == 1004 && ID_DEPTCODES == 10061 && ID_MEDREPS == 6042 && ID_DOCTOR == 6040 &&
+                      ID_PRODCODE == 6005 && ID_FAADD == 6000 && ID_FATYPE == 6036 && ID_ACCESS == 4078,
+                  "the pages' commands (pages/RecordPages.cpp)");
+    if (IsRecordPageCommand(id)) {
+        OpenRecordPage(*this, id);
+        return true;
+    }
     switch (id) {
     case ID_SYSACCESS:                     // TManilaGL::GLSysAccess (posted at startup)
         if (RunLogin(hwnd()) != IDOK) {
@@ -233,35 +243,35 @@ bool ManilaGL::OnCommand(WORD id, WORD code, HWND ctl)
         ApplyRights();                     // the user's menu code
         RestoreState();                    // the user's window and pages
         return true;
-    case ID_ACCESS:                        // Maintenance > User Access
+    case CM_USERS_CLASSIC:                 // Maintenance > User Access (ID_ACCESS): the dialogs (a page since S8-M2)
         RunUserAdministration(hwnd());
         return true;
     case ID_COMPANYPROFILE:                // TGlWindow::GLCompanySet
         RunCompanyProfile(hwnd());
         RefreshStatus();                   // the original updated a status bar it never created
         return true;
-    case ID_ACCTADD:                       // TGlWindow::GLAcctAdd: Accounts > Chart of Accounts, GLSUB
+    case CM_ACCOUNTS_CLASSIC:              // TGlWindow::GLAcctAdd (ID_ACCTADD): Accounts > Chart of Accounts, GLSUB
         RunChartOfAccounts(hwnd());
         return true;
     case ID_ACCTDEL:                       // TGlWindow::GLAcctDel: GLSUB > Delete Accounts
         RunDeleteAccounts(hwnd());
         return true;
-    case ID_DEPTCODES:                     // TGlWindow::GLDeptCodes: Accounts > Department Codes, GLSUB
+    case CM_DEPARTMENTS_CLASSIC:           // TGlWindow::GLDeptCodes (ID_DEPTCODES): Accounts > Department Codes, GLSUB
         RunDepartmentCodes(hwnd());
         return true;
-    case ID_MEDREPS:                       // TManilaGL::GLMedicalReps
+    case CM_MEDREPS_CLASSIC:               // TManilaGL::GLMedicalReps (ID_MEDREPS)
         RunMedicalReps(hwnd());
         return true;
-    case ID_DOCTOR:                        // TManilaGL::GLDoctor
+    case CM_DOCTORS_CLASSIC:               // TManilaGL::GLDoctor (ID_DOCTOR)
         RunDoctorCodes(hwnd());
         return true;
-    case ID_PRODCODE:                      // TManilaGL::GLProductCode
+    case CM_PRODUCTS_CLASSIC:              // TManilaGL::GLProductCode (ID_PRODCODE)
         RunProductCodes(hwnd());
         return true;
-    case ID_FATYPE:                        // TManilaGL::GLFixedTypes: Fixed Assets > Asset Types (spec #4)
+    case CM_ASSETTYPES_CLASSIC:            // TManilaGL::GLFixedTypes (ID_FATYPE): Fixed Assets > Asset Types (spec #4)
         RunAssetTypes(hwnd());
         return true;
-    case ID_FAADD:                         // TManilaGL::GLFixedAdd: Fixed Assets > Add/Modify
+    case CM_ASSETS_CLASSIC:                // TManilaGL::GLFixedAdd (ID_FAADD): Fixed Assets > Add/Modify
         RunFixedAssets(hwnd());
         return true;
     case ID_FASLIP:                        // TManilaGL::GLFixedSlip: Fixed Assets > Create Voucher
@@ -276,7 +286,7 @@ bool ManilaGL::OnCommand(WORD id, WORD code, HWND ctl)
     case kFixedAssetTypes:                 // ... > Fixed asset types (GL_FATYP.RPT)
         RunFixedAssetTypes(*this);
         return true;
-    case 4045:                             // TManilaGL::APAddVendors (ID_ADDVENDOR): Accounts > Purchase Vendors (spec #5 S5-M1)
+    case CM_VENDORS_CLASSIC:               // TManilaGL::APAddVendors (ID_ADDVENDOR, 4045): Accounts > Purchase Vendors (spec #5 S5-M1)
         RunApVendors(hwnd());
         return true;
     case 4059:                             // TManilaGL::ARAddVendors (ID_AR_CUSTOMER): Accounts > Sales Customers: a page (spec #8 S8-M1)
@@ -555,6 +565,7 @@ void ManilaGL::BuildNavigation()
     std::vector<HTREEITEM> open;   // open[d]: the group rows at depth d go into
     bool skipping = false;         // inside the Window menu
     HTREEITEM accounts = nullptr;
+    std::map<WORD, HTREEITEM> parentOf;   // a command's group: its classic dialog goes beside it
     for (const cmd::MenuRow& r : cmd::MenuRows()) {
         if (r.depth == 0) skipping = r.kind == cmd::Kind::Popup && cmd::PlainText(r.text) == L"Window";
         if (skipping || r.kind == cmd::Kind::Separator) continue;
@@ -565,7 +576,12 @@ void ManilaGL::BuildNavigation()
             if (r.depth == 0 && cmd::PlainText(r.text) == L"Accounts") accounts = open.back();
         } else {
             AddNavItem(parent, cmd::PlainText(r.text), r.id);
+            if (!parentOf.count(static_cast<WORD>(r.id))) parentOf[static_cast<WORD>(r.id)] = parent;
         }
+    }
+    for (const ClassicCommand& c : ClassicCommands()) {
+        const auto p = parentOf.find(c.page);
+        if (p != parentOf.end()) AddNavItem(p->second, c.text, c.classic);
     }
     // The classic dialog of a screen that became a page (spec #8 Q4): not on the menu.
     if (accounts) AddNavItem(accounts, L"Sales Customers (classic)", CM_AR_CUSTOMERS_CLASSIC);

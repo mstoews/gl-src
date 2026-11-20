@@ -63,6 +63,16 @@ Id RightOf(Id id)
     case CM_AR_RECOVER: return kRecoverGlVoucher;
     case CM_VOUCHER_LIST: return kGlVoucher;
     case CM_AR_CUSTOMERS_CLASSIC: return 4059;   // Sales Customers (spec #8 S8-M1)
+    // The classic dialogs of the S8-M2 pages: each follows its page's right.
+    case CM_DEPARTMENTS_CLASSIC: return 10061;
+    case CM_MEDREPS_CLASSIC: return 6042;
+    case CM_DOCTORS_CLASSIC: return 6040;
+    case CM_PRODUCTS_CLASSIC: return 6005;
+    case CM_VENDORS_CLASSIC: return 4045;
+    case CM_ACCOUNTS_CLASSIC: return 1004;
+    case CM_ASSETTYPES_CLASSIC: return 6036;
+    case CM_ASSETS_CLASSIC: return 6000;
+    case CM_USERS_CLASSIC: return 4078;
     default: return id;
     }
 }
