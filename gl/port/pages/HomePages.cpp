@@ -122,7 +122,7 @@ public:
              L"Post the purchase vouchers", 1048);
         Tile(3, plural(f_.arWaiting, L"sales voucher to post", L"sales vouchers to post"), L"Post them", 4049);
         Tile(4, plural(f_.journalRows, L"journal row to transfer", L"journal rows to transfer"), L"Update AR and AP", 1028);
-        Tile(5, plural(f_.chequesToPrint, L"cheque to print", L"cheques to print"), L"Print cheques", 4091);
+        Tile(5, plural(f_.chequesToPrint, L"cheque to print", L"cheques to print"), L"Print and confirm them", 8074);   // the Cheques page (spec #9 S9-M3)
         Tile(6, f_.depreciationRun ? L"Depreciation run for period " + std::to_wstring(f_.period) + L": done"
                                    : L"Depreciation for period " + std::to_wstring(f_.period) + L": not run",
              f_.depreciationRun ? (f_.depreciationVoucher ? L"GL voucher " + std::to_wstring(f_.depreciationVoucher) : std::wstring(L"No voucher"))

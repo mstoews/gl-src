@@ -13,6 +13,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdlib>
 
 namespace m = fx::model;
 
@@ -557,6 +558,129 @@ private:
     std::u8string copy_;
 };
 
+// ---- the cheque cycle (spec #9 D5, D6; S9-M3) --------------------------------------
+//
+// The classic screens are ApPayments.cpp's ConfirmDialog (8074) and
+// BankRecDialog with ClearDialog (6085); the messages are theirs.
+
+std::string bankText(const ApAccount& a)
+{
+    return a.dept.empty() ? a.account : a.account + "-" + a.dept;
+}
+
+class ChequesTask : public TaskModel {
+public:
+    std::string Title() const override { return "Cheques"; }
+    std::string Action() const override { return "Confirm printed"; }
+    std::vector<std::pair<std::string, int>> Columns() const override
+    {
+        return {{"Cheque", 64}, {"Vendor", 220}, {"Date", 80}, {"Amount", 100}};
+    }
+    unsigned Groups() const override { return data_group::kAp | data_group::kReports; }
+    std::string Noun(int n) const override { return n == 1 ? "cheque" : "cheques"; }
+    // ConfirmDialog asked "Have cheques %ld to %ld printed correctly? They can't be renumbered after this."
+    std::string QuestionNote() const override
+    {
+        return "Check only the cheques that printed correctly: they can't be renumbered after this. "
+               "Renumber a spoiled one first.";
+    }
+    std::vector<TaskRow> Load(cb4sqlite::Code4& code) override
+    {
+        std::vector<TaskRow> rows;
+        for (const ChequeToPrint& c : LoadChequesIn(code, ap_payment::kPaid)) {
+            const std::string who = TrimText(c.cheque.vendor) + (c.payee.name.empty() ? "" : "  " + TrimText(c.payee.name));
+            rows.push_back({c.cheque.number, {std::to_string(c.cheque.number), who, dateText(c.cheque.date), money(c.cheque.amount)}});
+        }
+        return rows;
+    }
+    TaskStep RunItem(cb4sqlite::Code4& code, const TaskRow& row) override
+    {
+        if (ConfirmPrinted(code, row.key, row.key) == 1) return {true, "Confirmed printed."};
+        return {false, "Not confirmed: it isn't waiting to be printed."};
+    }
+
+    std::string RowAction() const override { return "Ren&umber"; }
+    std::string RowInputLabel() const override { return "Ne&w number:"; }
+    long RowInputDefault(cb4sqlite::Code4& code) const override { return NextChequeNumber(code); }
+    TaskStep RunRowAction(cb4sqlite::Code4& code, const TaskRow& row) override
+    {
+        const long from = row.key, to = std::atol(m::Trim(rowInput).c_str());
+        if (to <= 0) return {false, "Enter the new cheque number."};
+        switch (RenumberCheque(code, from, to)) {
+        case RenumberResult::Renumbered:
+            return {true, "Cheque " + std::to_string(from) + " is now cheque " + std::to_string(to) + ". Print it again."};
+        case RenumberResult::NumberUsed: return {false, "Cheque number " + std::to_string(to) + " has already been used."};
+        default: return {false, "Cheque " + std::to_string(from) + " can't be renumbered."};
+        }
+    }
+    unsigned short PageCommand() const override { return 4091; }   // Print Cheques, its preview (Q3)
+    std::string PageCommandLabel() const override { return "&Print cheques"; }
+};
+
+class BankReconciliationTask : public TaskModel {
+public:
+    std::string Title() const override { return "Bank reconciliation"; }
+    std::string Action() const override { return "Clear"; }
+    std::vector<std::pair<std::string, int>> Columns() const override
+    {
+        return {{"Cheque", 64}, {"Vendor", 120}, {"State", 70}, {"Bank", 90}, {"Amount", 100}};
+    }
+    unsigned Groups() const override { return data_group::kAp | data_group::kGlBalances | data_group::kReports; }
+    std::string Noun(int n) const override { return n == 1 ? "cheque" : "cheques"; }
+    TaskOption Option() const override { return TaskOption::Date; }
+    bool OptionFiltersList() const override { return false; }   // the date is the clear's, not a filter
+    std::string OptionLabel() const override { return "&Date:"; }   // the clear's date, and a void's (1051 had one Date for both)
+    std::vector<TaskRow> Load(cb4sqlite::Code4& code) override
+    {
+        std::vector<TaskRow> rows;
+        for (const ChequeToPrint& c : LoadChequesIn(code, "")) {
+            const bool printed = c.state == ap_payment::kPrinted;
+            TaskRow r{c.cheque.number,
+                      {std::to_string(c.cheque.number), TrimText(c.cheque.vendor),
+                       printed ? "Printed" : c.state == ap_payment::kPaid ? "Made" : "", bankText(c.cheque.bank),
+                       money(c.cheque.amount)}};
+            r.checked = false;   // a statement's cheques are checked one by one
+            if (!printed) {      // ClearCheque refuses it
+                r.selectable = false;
+                r.note = "Not confirmed printed: confirm it on the Cheques page.";
+            }
+            rows.push_back(std::move(r));
+        }
+        return rows;
+    }
+    TaskStep RunItem(cb4sqlite::Code4& code, const TaskRow& row) override
+    {
+        switch (ClearCheque(code, row.key, option)) {
+        case ClearResult::Cleared: return {true, "Cleared " + dateText(option) + "."};
+        case ClearResult::NotPrinted: return {false, "Not confirmed printed (Cheques page)."};
+        case ClearResult::AlreadyCleared: return {false, "Already cleared."};
+        default: return {false, "Can't be cleared."};
+        }
+    }
+
+    std::string RowAction() const override { return "&Void"; }
+    std::string RowQuestion(const TaskRow& row) const override
+    {
+        return "Void cheque " + std::to_string(row.key) + " (" + (row.cells.size() > 1 ? row.cells[1] : std::string()) +
+               ", " + (row.cells.size() > 4 ? row.cells[4] : std::string()) +
+               ")? Its invoices become open again and its payment is reversed, dated " + dateText(option) + ".";
+    }
+    TaskStep RunRowAction(cb4sqlite::Code4& code, const TaskRow& row) override
+    {
+        const VoidOutcome v = VoidCheque(code, row.key, option);
+        switch (v.result) {
+        case VoidResult::Voided:
+            return {true, "Cheque " + std::to_string(row.key) + " voided: " + std::to_string(v.itemsReopened) +
+                              " invoice(s) open again; " + std::to_string(v.rowsRemoved) + " journal row(s) removed, " +
+                              std::to_string(v.rowsReversed) + " reversed."};
+        case VoidResult::ClosedPeriod:
+            return {false, "The date isn't in an open period, and the payment has gone to the General Ledger: it can't be "
+                           "reversed then."};
+        default: return {false, "Cheque " + std::to_string(row.key) + " can't be voided."};
+        }
+    }
+};
+
 } // namespace
 
 std::string TaskModel::Summary(const std::vector<TaskRow>& rows) const
@@ -633,3 +757,5 @@ std::unique_ptr<TaskModel> MakePurgePayablesTask() { return std::make_unique<Pur
 std::unique_ptr<TaskModel> MakePurgeReceivablesTask() { return std::make_unique<PurgeReceivablesTask>(); }
 std::unique_ptr<TaskModel> MakeCreateChequesTask(const std::string& payDate) { return std::make_unique<CreateChequesTask>(payDate); }
 std::unique_ptr<TaskModel> MakeBackupTask(const std::string& db, const std::string& today) { return std::make_unique<BackupTask>(db, today); }
+std::unique_ptr<TaskModel> MakeChequesTask() { return std::make_unique<ChequesTask>(); }
+std::unique_ptr<TaskModel> MakeBankReconciliationTask() { return std::make_unique<BankReconciliationTask>(); }

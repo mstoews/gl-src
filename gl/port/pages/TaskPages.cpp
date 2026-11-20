@@ -11,9 +11,13 @@
 //     Stop ends at a voucher boundary. The other tasks are one transaction
 //     each: Stop works before they start.
 //   - Refusals go on the rows; the result names what was made.
-//   - Not task pages yet (the classic dialogs stay): Print Cheques and Confirm
-//     Printed Cheques (they print), Restore (it closes and reopens the company),
-//     Bank Reconciliation. Clear Receipts is M3's receipts page.
+//   - Clear Receipts is M3's receipts page.
+//   - Spec #9 S9-M3 (D5, D6): Confirm Printed Cheques (8074) is the Cheques
+//     page and Bank Reconciliation (6085) a task page. Their one-row commands
+//     (Renumber, Void) run at once on the page's connection, after the job
+//     gate, and the list is loaded again. Print cheques sends 4091 to the
+//     frame (the preview, Q3). Their classic dialogs are "(classic)" entries.
+//     (S8-M4's note said Confirm Printed Cheques prints; it doesn't.)
 //
 #include "TaskPages.h"
 
@@ -23,6 +27,7 @@
 #include "../PortIds.h"
 #include "../Vouchers.h"   // OpenPeriods
 #include "TaskModels.h"
+#include "model/JobState.h"   // JobGate
 
 #include <CommCtrl.h>
 #include <Uxtheme.h>
@@ -62,6 +67,8 @@ const std::vector<std::pair<int, unsigned>> kAnchors = {
     {IDC_TK_LPAYDATE, m::kTopLeft}, {IDC_TK_PAYDATE, m::kTopLeft},   {IDC_TK_LBANK, m::kTopLeft},
     {IDC_TK_BANK, m::kTopLeft},    {IDC_TK_LNUMBER, m::kTopLeft},    {IDC_TK_NUMBER, m::kTopLeft},
     {IDC_TK_LIST, m::kAll},        {IDC_TK_PROGRESS, m::kBottomWide}, {IDC_TK_RESULT, m::kBottomWide},
+    {IDC_TK_LROWIN, m::kTopLeft},  {IDC_TK_ROWIN, m::kTopLeft},      {IDC_TK_PAGECMD, m::kTopLeft},
+    {IDC_TK_ROW, m::kTopLeft},
 };
 
 struct TaskCommand {
@@ -92,6 +99,8 @@ const std::vector<TaskCommand>& commands()
         {1057, CM_TK_CHEQUES_CLASSIC, L"Create Cheques (classic)", [] { return MakeCreateChequesTask(today()); }},
         {1072, CM_TK_BACKUP_CLASSIC, L"Backup Databases (classic)",
          [] { return MakeBackupTask(fx::WideToUtf8(CurDir), today()); }},
+        {8074, CM_TK_CONFIRM_CLASSIC, L"Confirm Printed Cheques (classic)", [] { return MakeChequesTask(); }},   // spec #9 S9-M3
+        {6085, CM_TK_BANKREC_CLASSIC, L"Bank Reconciliation (classic)", [] { return MakeBankReconciliationTask(); }},
     };
     return all;
 }
@@ -146,6 +155,14 @@ protected:
             MapWindowPoints(nullptr, form(), reinterpret_cast<POINT*>(&r), 2);
             SetWindowPos(Item(IDC_TK_REFRESH), nullptr, r.left, r.top, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
         }
+        // A row command with no page command beside it (Bank Reconciliation's Void) takes that
+        // command's place, so no gap reads as a missing button (spec #9 S9-M3).
+        if (!model_->RowAction().empty() && model_->PageCommand() == 0) {
+            RECT r{};
+            GetWindowRect(Item(IDC_TK_PAGECMD), &r);
+            MapWindowPoints(nullptr, form(), reinterpret_cast<POINT*>(&r), 2);
+            SetWindowPos(Item(IDC_TK_ROW), nullptr, r.left, r.top, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+        }
         SetAnchors(kAnchors);
         list_ = Item(IDC_TK_LIST);
         fx::SetAccessibleName(list_, wide(model_->Title()) + L": what it acts on");
@@ -189,6 +206,7 @@ protected:
             SendMessageW(combo, CB_SETCURSEL, periods.empty() ? static_cast<WPARAM>(-1) : periods.size() - 1, 0);
         }
         ShowPaymentOptions();
+        ShowRowCommands();
         SendDlgItemMessageW(form(), IDC_TK_PROGRESS, PBM_SETRANGE32, 0, 1);
         EnableWindow(Item(IDC_TK_STOP), FALSE);
         Load();
@@ -206,6 +224,11 @@ protected:
             case IDC_TK_ALL:
             case IDC_TK_NONE: CheckAll(id == IDC_TK_ALL); return true;
             case IDC_TK_REFRESH: Load(); return true;
+            case IDC_TK_ROW: RunRowCommand(); return true;
+            case IDC_TK_PAGECMD:   // Print cheques: the frame runs 4091, the preview
+                if (host() && model_->PageCommand())
+                    PostMessageW(host()->hostWindow(), WM_COMMAND, model_->PageCommand(), 0);
+                return true;
             default: break;
             }
         if ((code == CBN_SELCHANGE && (id == IDC_TK_PERIOD || id == IDC_TK_BANK)) || code == EN_CHANGE) {
@@ -218,7 +241,7 @@ protected:
     bool OnFormNotify(NMHDR* nm, LRESULT& result) override
     {
         if (nm->idFrom == IDC_TK_DATE && nm->code == DTN_DATETIMECHANGE) {
-            if (!job_.active()) Load();
+            if (!job_.active() && model_->OptionFiltersList()) Load();
             return true;
         }
         if (nm->idFrom == IDC_TK_PAYDATE) return true;   // an option, not a record
@@ -317,9 +340,73 @@ private:
         model_->payment.firstNumber = std::atol(Text(IDC_TK_NUMBER).c_str());
     }
 
-    void Load()
+    // The cheque pages' commands (spec #9 S9-M3); other tasks hide them.
+    void ShowRowCommands()
+    {
+        const bool row = !model_->RowAction().empty(), input = !model_->RowInputLabel().empty();
+        const bool page = model_->PageCommand() != 0;
+        if (row) SetDlgItemTextW(form(), IDC_TK_ROW, wide(model_->RowAction()).c_str());
+        if (input) SetDlgItemTextW(form(), IDC_TK_LROWIN, wide(model_->RowInputLabel()).c_str());
+        if (page) SetDlgItemTextW(form(), IDC_TK_PAGECMD, wide(model_->PageCommandLabel()).c_str());
+        ShowWindow(Item(IDC_TK_ROW), row ? SW_SHOW : SW_HIDE);
+        ShowWindow(Item(IDC_TK_LROWIN), input ? SW_SHOW : SW_HIDE);
+        ShowWindow(Item(IDC_TK_ROWIN), input ? SW_SHOW : SW_HIDE);
+        ShowWindow(Item(IDC_TK_PAGECMD), page ? SW_SHOW : SW_HIDE);
+        FillRowInput();
+    }
+
+    void FillRowInput()
+    {
+        if (model_->RowInputLabel().empty()) return;
+        long n = 0;
+        try {
+            n = model_->RowInputDefault(cb);
+        } catch (const std::exception&) {
+        }
+        SetText(IDC_TK_ROWIN, n > 0 ? std::to_string(n) : std::string());
+    }
+
+    // Renumber or Void the selected row: at once, one cheque, one transaction.
+    void RunRowCommand()
     {
         if (job_.active()) return;
+        if (m::JobGate::Busy()) {   // writes are serialised (spec #8 9.1)
+            ShowInfo(fx::InfoKind::Warning, wide(m::JobGate::Holder()) + L" is writing to the books: try again when it has finished.");
+            return;
+        }
+        const int sel = ListView_GetNextItem(list_, -1, LVNI_SELECTED);
+        if (sel < 0 || static_cast<size_t>(sel) >= rows_.size()) {
+            ShowInfo(fx::InfoKind::Information, L"Select the " + wide(model_->Noun(1)) + L" in the list first.");
+            return;
+        }
+        ReadOption();
+        model_->rowInput = Text(IDC_TK_ROWIN);
+        const TaskRow row = rows_[static_cast<size_t>(sel)];
+        const std::string question = model_->RowQuestion(row);
+        if (!question.empty()) {
+            std::wstring action = wide(model_->RowAction());
+            action.erase(std::remove(action.begin(), action.end(), L'&'), action.end());
+            enum { kGo = 101 };
+            if (fx::Ask(host() ? host()->hostWindow() : hwnd(), szApp, wide(question), L"",
+                        {{kGo, action + L" " + wide(model_->Noun(1))}, {IDCANCEL, L"Keep it"}}, IDCANCEL, IDCANCEL) != kGo)
+                return;
+        }
+        TaskStep s;
+        try {
+            s = model_->RunRowAction(cb, row);
+        } catch (const std::exception& e) {
+            s = {false, e.what()};
+        }
+        if (s.ok) {
+            Load();
+            FillRowInput();
+            Broadcast(model_->Groups());
+        }
+        ShowInfo(s.ok ? fx::InfoKind::Success : fx::InfoKind::Error, wide(s.note));
+    }
+
+    void ReadOption()
+    {
         switch (model_->Option()) {
         case TaskOption::Date: model_->option = fx::GetDateField(Item(IDC_TK_DATE)); break;
         case TaskOption::Period: {
@@ -329,6 +416,12 @@ private:
         }
         case TaskOption::None: break;
         }
+    }
+
+    void Load()
+    {
+        if (job_.active()) return;
+        ReadOption();
         try {
             rows_ = model_->Load(cb);
         } catch (const std::exception& e) {
@@ -393,9 +486,10 @@ private:
                 return false;
             }
             enum { kGo = 101 };
-            if (fx::Ask(host() ? host()->hostWindow() : hwnd(), szApp, wide(model_->Question(rows_)),
-                        model_->PerItem() ? L"It runs in the background: you can go on working, or Stop it after any voucher."
-                                          : L"It runs in the background, as one step.",
+            const std::wstring note = !model_->QuestionNote().empty() ? wide(model_->QuestionNote())
+                                      : model_->PerItem() ? L"It runs in the background: you can go on working, or Stop it after any voucher."
+                                                          : L"It runs in the background, as one step.";
+            if (fx::Ask(host() ? host()->hostWindow() : hwnd(), szApp, wide(model_->Question(rows_)), note,
                         {{kGo, wide(model_->Action())}, {IDCANCEL, L"Cancel"}}, kGo, IDCANCEL) != kGo)
                 return false;
         }
@@ -422,7 +516,7 @@ private:
             return false;
         }
         HideInfo();
-        for (int id : {IDC_TK_ACTION, IDC_TK_ALL, IDC_TK_NONE, IDC_TK_REFRESH, IDC_TK_DATE, IDC_TK_PERIOD, IDC_TK_PAYDATE, IDC_TK_BANK, IDC_TK_NUMBER}) EnableWindow(Item(id), FALSE);
+        for (int id : {IDC_TK_ACTION, IDC_TK_ALL, IDC_TK_NONE, IDC_TK_REFRESH, IDC_TK_DATE, IDC_TK_PERIOD, IDC_TK_PAYDATE, IDC_TK_BANK, IDC_TK_NUMBER, IDC_TK_ROWIN, IDC_TK_ROW}) EnableWindow(Item(id), FALSE);
         EnableWindow(Item(IDC_TK_STOP), TRUE);
         SetText(IDC_TK_RESULT, "Starting...");
         SetPageTitle(wide(model_->Title()) + L" - running");
@@ -448,7 +542,7 @@ private:
         case m::JobPhase::Failed: ShowInfo(fx::InfoKind::Error, L"It failed: " + wide(s.message())); break;
         default: break;
         }
-        for (int id : {IDC_TK_ACTION, IDC_TK_ALL, IDC_TK_NONE, IDC_TK_REFRESH, IDC_TK_DATE, IDC_TK_PERIOD, IDC_TK_PAYDATE, IDC_TK_BANK, IDC_TK_NUMBER}) EnableWindow(Item(id), TRUE);
+        for (int id : {IDC_TK_ACTION, IDC_TK_ALL, IDC_TK_NONE, IDC_TK_REFRESH, IDC_TK_DATE, IDC_TK_PERIOD, IDC_TK_PAYDATE, IDC_TK_BANK, IDC_TK_NUMBER, IDC_TK_ROWIN, IDC_TK_ROW}) EnableWindow(Item(id), TRUE);
         EnableWindow(Item(IDC_TK_STOP), FALSE);
         SetPageTitle(wide(model_->Title()));
         Broadcast(model_->Groups());

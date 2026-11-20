@@ -224,7 +224,7 @@ Each previews; print at least the landscape ones to PDF and check that no column
 
 The figures and checks above stay as they are. This table says where each step whose screen moved is done in the redesigned program (Spec #8, §15 criterion 2). Until Spec #8's acceptance, the old dialog of each moved screen is still reachable as a "(classic)" entry in the navigation pane, so each step can be done either way.
 
-Steps are numbered within their criterion: "2, step 3" is the third check box under criterion 2. Steps not listed use screens that didn't move (Print Cheques, Confirm Printed Cheques, Bank Reconciliation, the reports and the `sqlite3` queries).
+Steps are numbered within their criterion: "2, step 3" is the third check box under criterion 2. Steps not listed use screens that didn't move (Print Cheques, the reports and the `sqlite3` queries). Since Spec #9 S9-M3 (`plans/2026-11-20-owl-to-win32-sdk-port-spec9-plan.md`), Confirm Printed Cheques is the Cheques page and Bank Reconciliation a task page; their dialogs are "(classic)" entries until Spec #9's acceptance.
 
 | Criterion and step | Where it's done now | What differs |
 |---|---|---|
@@ -258,6 +258,11 @@ Steps are numbered within their criterion: "2, step 3" is the third check box un
 | 8, step 5 | Update AR and AP task page, then Post Voucher > General Ledger task page | The result line names GL voucher 105. On the Post page leave only 105 checked. |
 | 9, step 1 | Purge Paid Payables task page | The date is typed on the page as "Paid before:" (was "Cleared and paid before:"). For 10/30/26 the list is empty. |
 | 9, step 2 | Purge Paid Payables task page | With 12/31/26 the two invoices are listed. Press the action button, confirm in the task dialog; the result line reports what was purged. |
+| 7, step 2 | Cheques page (Confirm Printed Cheques opens it) | 5002 is listed with a check box. Select its row, New number 5001, **Renumber**: the information bar says "Cheque number 5001 has already been used." New number 5003, **Renumber**: "Cheque 5002 is now cheque 5003. Print it again." The New number box starts at the next free number. |
+| 7, step 3 | Cheques page, **Print cheques** | Opens the same preview as Receipts/Payments > Print Cheques, which still works. |
+| 7, step 4 | Cheques page, 5003 checked, **Confirm printed**, then confirm | No From and To: each checked cheque is confirmed, one at a time, and an unchecked one isn't. The question is a task dialog that says checked cheques can't be renumbered after. The row's note says "Confirmed printed." and the result "1 cheque done." 5003 then leaves the list. |
+| 8, step 1 | Bank Reconciliation page: Date 10/31/2026, check 5003, **Clear**, then confirm | No Clear or Void dialog: the page's Date is the clear's. 5003's note says "Cleared 10/31/2026." and it leaves the list on Refresh. A made cheque, not yet confirmed printed, is listed with no check box and why. |
+| 8, step 2 | Bank Reconciliation page: Date 10/31/2026, select 5001, **Void**, then **Void cheque** | The question is a task dialog naming the date. The information bar says "Cheque 5001 voided: 1 invoice(s) open again; 0 journal row(s) removed, 2 reversed." |
 
 ## Gaps and triage
 

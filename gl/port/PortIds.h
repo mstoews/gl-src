@@ -106,6 +106,10 @@
 #define IDC_TK_BANK             22415
 #define IDC_TK_LNUMBER          22416
 #define IDC_TK_NUMBER           22417
+#define IDC_TK_LROWIN           22418   // the row command's number (Renumber's new number; spec #9 S9-M3)
+#define IDC_TK_ROWIN            22419
+#define IDC_TK_PAGECMD          22420   // another command the page offers (Print cheques)
+#define IDC_TK_ROW              22421   // the command on the selected row (Renumber, Void)
 
 // ---- controls --------------------------------------------------------------
 
@@ -391,6 +395,8 @@
 #define CM_TK_PURGEAR_CLASSIC       20539   // Purge Received Receivables (4062)
 #define CM_TK_CHEQUES_CLASSIC       20540   // Create Cheques (1057)
 #define CM_TK_BACKUP_CLASSIC        20541   // Backup Databases (1072)
+#define CM_TK_CONFIRM_CLASSIC       20547   // Confirm Printed Cheques (8074): the Cheques page since spec #9 S9-M3
+#define CM_TK_BANKREC_CLASSIC       20548   // Bank Reconciliation (6085): its task page since spec #9 S9-M3
 // Spec #8 S8-M5.
 #define CM_HOME                 20542   // the home page (the navigation pane's first item)
 #define CM_COMMAND_SEARCH       20543   // Ctrl+K: command search
