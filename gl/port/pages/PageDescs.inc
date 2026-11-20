@@ -155,10 +155,11 @@ const PageDesc k_accounts{
         {IDC_PG_NEW, m::kTopLeft}, {IDC_PG_SAVE, m::kTopLeft}, {IDC_PG_DELETE, m::kTopLeft},
         {21000, m::kTopLeft}, {21001, m::kLeftTall}, {21100, m::kTopLeft}, {21010, m::kTopLeft},
         {21011, m::kTopLeft}, {21012, m::kTopLeft}, {21013, m::kTopLeft}, {21014, m::kTopLeft},
-        {21101, m::kTopLeft}, {21015, m::kTopLeft}, {21016, m::kTopLeft},
+        {21004, m::kTopWide}, {21101, m::kTopLeft}, {21400, m::kTopLeft}, {21015, m::kTopLeft},
+        {21401, m::kTopLeft}, {21016, m::kTopLeft}, {21005, m::kAll},
     },
     {},
-    {},
+    {{L"Balances", 0, "", {21101, 21400, 21015, 21401, 21016}}, {L"Budget", 21005, "budget", {21005}}},
 };
 
 const PageDesc k_assetTypes{

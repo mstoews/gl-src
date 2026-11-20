@@ -414,10 +414,25 @@ std::pair<std::string, std::string> splitKey(const std::string& key)
                                      : std::make_pair(key.substr(0, dash), key.substr(dash + 1));
 }
 
+// Budget Data (dialog 1017, spec #9 D1, S9-M1) is the account's Budget tab:
+// 12 rows of period, budget (edited), current year and previous year, read
+// with ReadBudget and written with SaveBudget, as the dialog did. Save on the
+// page is the decision, so 8098 ("Update the current budget information?")
+// isn't asked (spec #8 D9). The budget is written only when it changed, after
+// the account itself; a new account's budget is written once it's added.
 class AccountsModel : public RecordModel {
 public:
-    using RecordModel::RecordModel;
+    explicit AccountsModel(cb4sqlite::Code4& code) : RecordModel(code)
+    {
+        // 1017's columns; the budget cells take an amount (its tbFloat mask, 9999999999999.99).
+        budget_.SetColumns({{"period", "Period", fx::model::CellKind::Number, 6, true},
+                            {"budget", "Budget", fx::model::CellKind::Amount, 16},
+                            {"current", "Current Year", fx::model::CellKind::Amount, 16, true},
+                            {"previous", "Previous Year", fx::model::CellKind::Amount, 16, true}});
+        budget_.SetFixedRows(12);
+    }
     std::string Noun() const override { return "account"; }
+    fx::model::EntryGridModel* Grid(const std::string& key) override { return key == "budget" ? &budget_ : nullptr; }
     std::vector<std::pair<std::string, std::string>> Choices(const std::string& field) const override
     {
         if (field == "type")
@@ -478,7 +493,33 @@ protected:
             if (!SeekAccount(t, account, dept)) return Refuse("", "The account is no longer on file.");
             ModifyAccount(t, in);
         }
+        if (BudgetChanged()) {   // SaveBudget writes the current record: the account just written
+            const auto [account, dept] = isNew ? std::make_pair(in.account, in.dept) : splitKey(key());
+            if (!SeekAccount(t, account, dept)) return Refuse("", "The account is no longer on file.");
+            std::vector<double> budget;
+            for (int r = 0; r < 12; ++r)
+                budget.push_back(static_cast<double>(record::ToCents(budget_.Cell(r, "budget"))) / 100.0);
+            SaveBudget(t, budget);
+        }
         return {true, "", ""};
+    }
+    void LoadGrids(const std::string& key) override
+    {
+        std::vector<std::vector<std::string>> rows;
+        std::vector<BudgetRow> figures(12);
+        if (!key.empty()) {
+            const auto [account, dept] = splitKey(key);
+            AccountsTable t(code_);
+            if (t.isValid() && SeekAccount(t, account, dept)) figures = ReadBudget(t);
+        }
+        loaded_.clear();
+        for (size_t i = 0; i < 12; ++i) {
+            const BudgetRow& b = figures[i];
+            rows.push_back({std::to_string(i + 1), record::Cents(centsOf(b.budget)), record::Cents(centsOf(b.current)),
+                            record::Cents(centsOf(b.previous))});
+            loaded_.push_back(centsOf(b.budget));
+        }
+        budget_.SetRows(rows);
     }
     Result Remove(const std::string& key) override
     {
@@ -491,6 +532,17 @@ protected:
         DeleteAccount(t);
         return {true, "", ""};
     }
+
+private:
+    bool BudgetChanged() const
+    {
+        for (int r = 0; r < 12; ++r)
+            if (record::ToCents(budget_.Cell(r, "budget")) != loaded_[static_cast<size_t>(r)]) return true;
+        return false;
+    }
+
+    fx::model::EntryGridModel budget_;
+    std::vector<std::int64_t> loaded_ = std::vector<std::int64_t>(12);   // the budget as read, in cents: written only if it changed
 };
 
 // ---- Asset types -------------------------------------------------------------

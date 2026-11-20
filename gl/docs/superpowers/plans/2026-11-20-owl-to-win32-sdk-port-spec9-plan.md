@@ -3,7 +3,7 @@
 **Spec reference:** `gl/docs/superpowers/specs/2026-11-19-owl-to-win32-sdk-port-spec8-design.md`, §5.1 (list and detail) and §5.3 (task pages). This plan adds no design of its own beyond the decisions in [Decisions](#decisions) below.
 **Gap:** G3 of `gl/docs/superpowers/specs/2026-11-19-spec8-acceptance.md` ("Budget Data, Company Profile's accounts and banks, Print Cheques, Confirm Printed Cheques, Restore and Bank Reconciliation are still dialogs." Deferred: a later spec).
 **Date:** 2026-11-20
-**Plan status:** Reviewed; Q1–Q4 answered (2026-11-20). S9-M0 built.
+**Plan status:** Reviewed; Q1–Q4 answered (2026-11-20). S9-M0 and S9-M1 built.
 
 **Paths:** relative to the repository root. The screens today:
 
@@ -123,6 +123,31 @@ S is less than a day, M is 1–3 days. **Parallel work:** M3 and M4 need only Sp
 ---
 
 ## Milestone 1 — Budget Data as the account's tab
+
+> **As built (2026-11-20; built and run on Windows 11, VS 18, v145).**
+> - **The page** (task 1, `make_pages.py`): the Chart of Accounts page has two tabs below the account's group.
+>   - **Balances:** the balance and opening fields, which were a group of their own on the page before; now one tab rather than a strip with a single tab.
+>   - **Budget:** the fixed 12-row grid of Period, Budget, Current Year and Previous Year. Only Budget is edited, as an amount (1017's tbFloat mask).
+> - **The model** (task 2, `RecordModels.cpp` `AccountsModel`):
+>   - **Reading:** `LoadGrids` reads `ReadBudget` for the chosen account; a new account shows the 12 periods blank.
+>   - **Saving:** `Write` calls `SaveBudget` after `AppendAccount` or `ModifyAccount`, seeking the account first. It does so only when a budget cell changed from what was read (compared in cents), so a save that only changes the description doesn't rewrite the budget.
+>   - **8098** ("Update the current budget information?") isn't asked: Save is the decision (spec #8 D9).
+>   - **3081** (no account shown) can't arise: the tab belongs to an account, and a new account's budget is written when the account is added.
+> - **The commands** (task 3):
+>   - 10074 opens the Chart of Accounts page on its Budget tab (`ShowRecordTab`), and counts as a recent page.
+>   - "Budget Data (classic)" (`CM_BUDGET_CLASSIC` 20545) opens dialog 1017. It sits under Budget Data in the navigation pane and follows 10074's right.
+> - **The gate** (task 4): the page's Save already waits for a writing job (`SaveWaitsForJob`); nothing new was needed.
+> - **`/checkaccess`:** for a page with a Tab control, it chooses each tab in turn and checks it ("page 1004, Chart of Accounts, tab Budget: ..."). M0 found that only the shown tab was checked before. Read from the check's report: both tabs pass all four checks.
+> - **`/stress`:** each record page also chooses its Budget tab (only the Chart of Accounts page has one) and its first tab.
+> - **Tests** (task 5; `test_pages.cpp`, `gl_tests` 223, 1 new):
+>   - **Spec #2 sheet #10 through the model:** 410001 dept 10 shows 12 periods. Periods 1, 6 and 12 edited and saved, and `budget1`, `budget6` and `budget12` read back with SQL. Reopened, the amounts are there, and no other account's budget changed.
+>   - **An unchanged budget isn't rewritten.**
+>   - **A new account's budget is written** once the account is added.
+>   - **The figure:** the sheet quotes period 7's current year as −850.00, which is after its step #6 posts voucher 101 and a voucher 104 the walkthrough types. The fixture has no 104, so the test posts 101 and expects −600.00.
+> - **The sheet:** the Spec #2 sheet's redesign section says Budget Data is now the Budget tab, and its table gains #10's three steps.
+> - **Checked:** Debug and Release `/W4 /WX` clean. `gl_tests` 223, `cb4sqlite_tests` 79 and `report_tests` 19 pass in both. `/checkres`, `/checkaccess` and `/stress` (3 runs) exit 0 in both.
+> - **One unexplained `/checkres` failure:** the first Release run, right after `setup.cmd` and the test suites, exited 1 (one check failed). It then passed 44 times (Release and Debug, and that same sequence three times). The 25 runs that read the report found nothing, so the failing check wasn't caught. If it comes back, read the report without `/quiet`.
+> - **Not driven in the app:** typing into the Budget grid with the keyboard (the drive sends no keystrokes; the model's keys are `test_grid.cpp`'s, and `/stress` types into the tab check page's grid).
 
 **Goal:** the budget is entered on the Chart of Accounts page (D1).
 

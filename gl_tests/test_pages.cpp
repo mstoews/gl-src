@@ -2,13 +2,14 @@
 // gl_tests: the list-and-detail pages' models (spec #8 5; plan S8-M2), each
 // through its screen's master criterion on the dev fixture: the rules the
 // classic dialog enforced, D9 (no "modify?"; a taken key refused), and the
-// User Access page's MENUCODE written byte for byte; a record page's grid tab (S9-M0).
+// User Access page's MENUCODE written byte for byte; a record page's grid tab (S9-M0); the Chart of Accounts page's Budget tab (S9-M1).
 //
 #include "GlTestDb.h"
 
 #include "Accounts.h"
 #include "Ap.h"
 #include "Assets.h"
+#include "Vouchers.h"   // PostVoucher (S9-M1)
 #include "pages/RecordModels.h"
 
 #include <map>
@@ -426,4 +427,62 @@ TEST_CASE("Record page grids: loaded on New and Select, kept through Save's key 
     REQUIRE(m.Select("A1"));
     CHECK(g.Cell(0, "budget").empty());
     CHECK(g.Cell(2, "budget") == "300.00");
+}
+
+TEST_CASE("Chart of Accounts page: the Budget tab is Budget Data (S9-M1, spec #2 sheet #10)", "[pages][budget]")
+{
+    FixtureDb db;
+    auto m = MakeAccountsModel(db.code);
+    m->Load();
+    fx::model::EntryGridModel* g = m->Grid("budget");
+    REQUIRE(g);
+    CHECK(g->fixedRows() == 12);
+
+    // The sheet's -850.00 in period 7 is after its step #6 posts voucher 101 (600.00) and the
+    // voucher 104 it typed (250.00). The fixture has no 104: post 101, and expect its 600.00.
+    REQUIRE(PostVoucher(db.code, 101).posted.size() == 1);
+    // Pick 410001 dept 10: periods 1-12, current year period 7 at -600.00.
+    REQUIRE(m->Select("410001-10"));
+    REQUIRE(g->Rows() == 12);
+    CHECK(g->Cell(0, "period") == "1");
+    CHECK(g->Cell(11, "period") == "12");
+    CHECK(g->Cell(6, "current") == "-600.00");
+    const std::string others = scalar(db.code, "SELECT group_concat(budget1 || '/' || budget6 || '/' || budget12, ';') "
+                                               "FROM glaccts WHERE NOT (trim(account) = '410001' AND trim(dept) = '10')");
+
+    // Edit periods 1, 6 and 12 and Save: no question, budget1, 6 and 12 written.
+    g->SetCell(0, "budget", "1,000.00");
+    g->SetCell(5, "budget", "600.50");
+    g->SetCell(11, "budget", "1,200.00");
+    const RecordModel::Result r = m->Save();
+    REQUIRE(r.ok);
+    CHECK(r.message == "Account 410001-10 saved.");
+    CHECK(scalar(db.code, "SELECT budget1 || ' ' || budget6 || ' ' || budget12 FROM glaccts "
+                          "WHERE trim(account) = '410001' AND trim(dept) = '10'") == "1000.0 600.5 1200.0");
+    CHECK(g->Cell(5, "budget") == "600.50");   // shown as saved, read back
+    CHECK(g->Cell(6, "current") == "-600.00");  // the period figures untouched
+
+    // Reopened: the three amounts are there; no other account's budget changed.
+    m->New();
+    CHECK(g->Cell(0, "budget").empty());
+    REQUIRE(m->Select("410001-10"));
+    CHECK(g->Cell(0, "budget") == "1,000.00");
+    CHECK(g->Cell(11, "budget") == "1,200.00");
+    CHECK(scalar(db.code, "SELECT group_concat(budget1 || '/' || budget6 || '/' || budget12, ';') "
+                          "FROM glaccts WHERE NOT (trim(account) = '410001' AND trim(dept) = '10')") == others);
+
+    // A save with the budget unchanged doesn't write it (no SaveBudget): only the description changes.
+    m->Set("descript", "Sales - dept 10");
+    REQUIRE(m->Save().ok);
+    CHECK(scalar(db.code, "SELECT budget6 FROM glaccts WHERE trim(account) = '410001' AND trim(dept) = '10'") == "600.5");
+
+    // A new account's budget is written once the account is added.
+    m->New();
+    m->Set("account", "998000");
+    m->Set("descript", "Suspense");
+    m->Set("type", "B");
+    g->SetCell(2, "budget", "300.00");
+    REQUIRE(m->Save().ok);
+    CHECK(scalar(db.code, "SELECT budget3 FROM glaccts WHERE trim(account) = '998000'") == "300.0");
+    CHECK(g->Cell(2, "budget") == "300.00");
 }

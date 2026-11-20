@@ -25,6 +25,9 @@
 //     forward. The tab check page (IDD_PG_TABCHECK) has a tab of fields and a
 //     grid tab over an in-memory record, for /checkres and /stress; no
 //     command opens it.
+//   - Budget Data (spec #9 S9-M1, D1) is the Chart of Accounts page's Budget
+//     tab (RecordModels.cpp, AccountsModel); 10074 opens the page on it
+//     (ShowRecordTab).
 //
 #include "RecordPage.h"
 
@@ -168,6 +171,15 @@ public:
     int shownCount() const { return static_cast<int>(shown_.size()); }
     // /stress: choose a tab; type into the current cell of its grid, then Tab.
     void ChooseTab(int tab) { ShowTab(tab); }
+    bool ChooseTab(const std::wstring& caption)
+    {
+        for (size_t i = 0; i < d_.tabs.size(); ++i)
+            if (caption == d_.tabs[i].caption) {
+                ShowTab(static_cast<int>(i));
+                return true;
+            }
+        return false;
+    }
     void TypeInGrid(int tab, const std::string& text)
     {
         if (tab < 0 || static_cast<size_t>(tab) >= d_.tabs.size()) return;
@@ -876,6 +888,12 @@ bool ShowRecord(HWND page, const std::string& key)
     return p && p->ShowKey(key);
 }
 
+bool ShowRecordTab(HWND page, const std::wstring& caption)
+{
+    auto* p = dynamic_cast<RecordPage*>(fx::Window::FromHandle(page));
+    return p && p->ChooseTab(caption);
+}
+
 bool IsRecordPageCommand(WORD command)
 {
     return entryOf(command) != nullptr;
@@ -947,7 +965,9 @@ int StressRecordPages(int times)
             p->SelectShown(0);
             p->Filter("");
             p->SelectShown(1);
+            p->ChooseTab(L"Budget");   // the Chart of Accounts page's Budget tab (spec #9 S9-M1); others have none
             p->SelectShown(0);
+            p->ChooseTab(0);
             w.ClosePage(h);
             if (IsWindow(h)) return false;
         }
