@@ -12,8 +12,13 @@
 #include "model/Validate.h"
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <cstdlib>
+#include <ctime>
+#include <cwchar>
+#include <cwctype>
+#include <filesystem>
 
 namespace m = fx::model;
 
@@ -681,6 +686,148 @@ public:
     }
 };
 
+// ---- Restore Databases (spec #9 D7, S9-M4) ------------------------------------------
+//
+// The classic screen is Backup.cpp's RunRestore (a file dialog, then message
+// boxes); the checks, the question and the messages are its.
+
+std::filesystem::path pathOf(const std::string& utf8) { return std::filesystem::path(std::u8string(utf8.begin(), utf8.end())); }
+std::string utf8Of(const std::filesystem::path& p)
+{
+    const std::u8string u = p.u8string();
+    return std::string(u.begin(), u.end());
+}
+
+class RestoreTask : public TaskModel {
+public:
+    explicit RestoreTask(std::string current) : current_(pathOf(current)) {}
+    std::string Title() const override { return "Restore"; }
+    std::string Action() const override { return "Restore"; }
+    bool PerItem() const override { return false; }
+    bool Checks() const override { return false; }
+    unsigned Groups() const override { return data_group::kAll; }
+    std::vector<std::pair<std::string, int>> Columns() const override
+    {
+        return {{"Backup", 220}, {"Saved", 120}, {"Size", 80}};
+    }
+    std::string Noun(int n) const override { return n == 1 ? "backup" : "backups"; }
+    std::string Summary(const std::vector<TaskRow>& rows) const override
+    {
+        if (rows.empty()) return "No backups beside " + utf8Of(current_.filename()) + ": Browse for one.";
+        return std::to_string(rows.size()) + " " + Noun(static_cast<int>(rows.size())) +
+               ". Select the one to restore: everything entered since it was made will be lost.";
+    }
+    bool ActionOnRow() const override { return true; }
+    bool ClosesOtherPages() const override { return true; }
+    std::string RowAction() const override { return "&Restore"; }
+    std::string BrowseLabel() const override { return "B&rowse..."; }
+
+    std::vector<TaskRow> Load(cb4sqlite::Code4&) override
+    {
+        std::vector<std::filesystem::path> found;
+        std::error_code ec;
+        for (const auto& e : std::filesystem::directory_iterator(current_.parent_path(), ec)) {
+            if (!e.is_regular_file(ec)) continue;
+            const std::filesystem::path p = e.path();
+            const std::wstring ext = p.extension().wstring();
+            if (differExt(ext, L".db") && differExt(ext, L".bak")) continue;
+            if (std::filesystem::equivalent(p, current_, ec)) continue;
+            found.push_back(p);
+        }
+        for (const std::filesystem::path& p : added_)
+            if (std::find(found.begin(), found.end(), p) == found.end()) found.push_back(p);
+        std::sort(found.begin(), found.end(), [](const std::filesystem::path& a, const std::filesystem::path& b) {
+            std::error_code e1, e2;
+            return std::filesystem::last_write_time(a, e1) > std::filesystem::last_write_time(b, e2);
+        });
+        files_ = found;
+        std::vector<TaskRow> rows;
+        for (size_t i = 0; i < files_.size(); ++i) {
+            const std::filesystem::path& p = files_[i];
+            // The name beside the company file; a file from elsewhere (Browse) by its whole path.
+            std::error_code e;
+            const bool beside = std::filesystem::equivalent(p.parent_path(), current_.parent_path(), e);
+            TaskRow r{static_cast<long>(i), {utf8Of(beside ? p.filename() : p), savedOf(p), sizeOf(p)}};
+            std::string why;
+            if (!CheckRestoreFile(current_, p, &why)) {   // RunRestore's check
+                r.selectable = false;
+                r.note = "Can't be restored: " + why + ".";
+            }
+            rows.push_back(std::move(r));
+        }
+        return rows;
+    }
+    int AddFile(cb4sqlite::Code4& code, const std::string& utf8Path) override
+    {
+        const std::filesystem::path p = pathOf(utf8Path);
+        if (std::find(added_.begin(), added_.end(), p) == added_.end()) added_.push_back(p);
+        Load(code);
+        const auto it = std::find(files_.begin(), files_.end(), p);
+        return it == files_.end() ? -1 : static_cast<int>(it - files_.begin());
+    }
+    std::string RowQuestion(const TaskRow& row) const override
+    {
+        return "Replace the company database with " + fileOf(row) + "? Everything entered since that backup will be lost. "
+               "The current database is kept as " + utf8Of(BackupOfCurrent(current_).filename()) + ".";
+    }
+    TaskStep RunRowAction(cb4sqlite::Code4& code, const TaskRow& row) override
+    {
+        if (!row.selectable) return {false, row.note};
+        std::string why;
+        if (!CheckRestoreFile(current_, pathOf(fileOf(row)), &why))   // checked again: the file may have changed
+            return {false, "This file can't be restored: " + why + "."};
+        const std::string bak = utf8Of(BackupOfCurrent(current_).filename());
+        const RestoreResult r = RestoreDatabase(code, current_, pathOf(fileOf(row)));
+        if (r.restored) return {true, "The company database was restored. The previous one is " + bak + "."};
+        std::string text = "The restore failed: " + r.error + ".";
+        text += r.reopened ? " The company database is unchanged."
+                           : " The company database could not be reopened. Close the program and check " + utf8Of(current_) +
+                                 " and " + bak + ".";
+        return {false, text};
+    }
+
+private:
+    static bool differExt(const std::wstring& a, const wchar_t* b)   // true if they differ
+    {
+        if (a.size() != std::wcslen(b)) return true;
+        for (size_t i = 0; i < a.size(); ++i)
+            if (std::towlower(a[i]) != std::towlower(b[i])) return true;
+        return false;
+    }
+    std::string fileOf(const TaskRow& row) const
+    {
+        return row.key >= 0 && static_cast<size_t>(row.key) < files_.size() ? utf8Of(files_[static_cast<size_t>(row.key)])
+                                                                            : std::string();
+    }
+    static std::string savedOf(const std::filesystem::path& p)
+    {
+        std::error_code ec;
+        const auto t = std::filesystem::last_write_time(p, ec);
+        if (ec) return {};
+        const auto sys = std::chrono::clock_cast<std::chrono::system_clock>(t);
+        const std::time_t tt = std::chrono::system_clock::to_time_t(sys);
+        std::tm tm{};
+#ifdef _WIN32
+        localtime_s(&tm, &tt);
+#else
+        localtime_r(&tt, &tm);
+#endif
+        char buf[32];
+        std::strftime(buf, sizeof buf, "%m/%d/%Y %H:%M", &tm);
+        return buf;
+    }
+    static std::string sizeOf(const std::filesystem::path& p)
+    {
+        std::error_code ec;
+        const auto n = std::filesystem::file_size(p, ec);
+        if (ec) return {};
+        return std::to_string((n + 1023) / 1024) + " KB";
+    }
+
+    std::filesystem::path current_;
+    std::vector<std::filesystem::path> files_, added_;
+};
+
 } // namespace
 
 std::string TaskModel::Summary(const std::vector<TaskRow>& rows) const
@@ -759,3 +906,4 @@ std::unique_ptr<TaskModel> MakeCreateChequesTask(const std::string& payDate) { r
 std::unique_ptr<TaskModel> MakeBackupTask(const std::string& db, const std::string& today) { return std::make_unique<BackupTask>(db, today); }
 std::unique_ptr<TaskModel> MakeChequesTask() { return std::make_unique<ChequesTask>(); }
 std::unique_ptr<TaskModel> MakeBankReconciliationTask() { return std::make_unique<BankReconciliationTask>(); }
+std::unique_ptr<TaskModel> MakeRestoreTask(const std::string& current) { return std::make_unique<RestoreTask>(current); }

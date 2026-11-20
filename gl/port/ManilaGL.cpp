@@ -396,7 +396,7 @@ bool ManilaGL::OnCommand(WORD id, WORD code, HWND ctl)
     case CM_TK_BACKUP_CLASSIC:             // (ID_BACKUP) TGlWindow::GLBackup: Backup Databases
         RunBackup(hwnd());
         return true;
-    case ID_RESTORE:                       // TGlWindow::GLRestore: Restore Databases
+    case CM_TK_RESTORE_CLASSIC:            // (ID_RESTORE) TGlWindow::GLRestore: Restore Databases; 1074 is its task page (spec #9 S9-M4)
         if (RunRestore(hwnd())) {
             RefreshStatus();                   // the restored company's name and period
             rights_.reset();                   // and its accessm
@@ -556,6 +556,7 @@ bool ManilaGL::OnMessage(UINT msg, WPARAM wp, LPARAM lp, LRESULT& result)
         fx::ApplyFrameLook(hwnd());   // the theme, transparency or high contrast changed
     if (msg == kDataChanged) {   // spec #8 9.3: a save or a job changed the books, or a job started
         if (wp & data_group::kCompany) RefreshStatus();   // the company and the period (spec #9 S9-M2)
+        if (wp & data_group::kRights) rights_.reset();     // a restored company's accessm (S9-M4), as ID_RESTORE did
         RefreshWaiting();
         ApplyRights();             // writing commands off while a job holds the books
         result = 0;

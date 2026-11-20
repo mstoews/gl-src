@@ -3,7 +3,7 @@
 **Spec reference:** `gl/docs/superpowers/specs/2026-11-19-owl-to-win32-sdk-port-spec8-design.md`, §5.1 (list and detail) and §5.3 (task pages). This plan adds no design of its own beyond the decisions in [Decisions](#decisions) below.
 **Gap:** G3 of `gl/docs/superpowers/specs/2026-11-19-spec8-acceptance.md` ("Budget Data, Company Profile's accounts and banks, Print Cheques, Confirm Printed Cheques, Restore and Bank Reconciliation are still dialogs." Deferred: a later spec).
 **Date:** 2026-11-20
-**Plan status:** Reviewed; Q1–Q4 answered (2026-11-20). S9-M0 to S9-M3 built.
+**Plan status:** Reviewed; Q1–Q4 answered (2026-11-20). S9-M0 to S9-M4 built.
 
 **Paths:** relative to the repository root. The screens today:
 
@@ -286,6 +286,30 @@ S is less than a day, M is 1–3 days. **Parallel work:** M3 and M4 need only Sp
 ---
 
 ## Milestone 4 — Restore as a task page
+
+> **As built (2026-11-20; built and run on Windows 11, VS 18, v145).**
+> - **The page** (1074, `MakeRestoreTask`; task 2):
+>   - **The list:** the backups beside the company file, newest first. Each `.db` or `.bak` file except the company file itself is shown with its name, when it was saved and its size, and checked with `CheckRestoreFile`. A file that fails has no restore, with the note "Can't be restored: <why>."
+>   - **Browse...** adds a file from anywhere, listed by its whole path and selected.
+>   - **Restore** acts on the selected file. It asks RunRestore's question in a task dialog ("Replace the company database with <file>? Everything entered since that backup will be lost. The current database is kept as <name>.bak."), then shows the result on the information bar.
+>   - **Deviation** (task 2): no "file's checks shown before the action" panel. The list carries each file's check and its date and size, and Restore is refused, with why, on a file that fails.
+> - **Running it** (task 3):
+>   - **On the page, not as a job:** `RestoreDatabase` closes the company connection.
+>   - **First,** every other page but Home is closed. Each asks about its unsaved changes, as closing the program does (Q2). Home stays: it holds no tables. If a page is kept open, nothing is restored.
+>   - **After:** every data group is broadcast (`data_group::kAll`, with the new `kRights`). The frame shows the company and period again and reads the rights again, as ID_RESTORE did.
+> - **Framework:** `TaskModel` gains `ActionOnRow` (the action button is the row command), `ClosesOtherPages`, and `BrowseLabel` / `AddFile` (the page-command button runs a file dialog).
+> - **The command** (task 4): 1074 opens the page; "Restore Databases (classic)" (`CM_TK_RESTORE_CLASSIC` 20549) runs RunRestore. Both are writing commands, as 1074 was (D8).
+> - **Tests** (task 5; `gl_tests/test_restore.cpp`, 3 cases; `gl_tests` 238):
+>   - **The list:** a backup and a text file named `.db` beside the company file; the company file not listed; the good one restorable, the text one refused with why.
+>   - **The question, word for word.**
+>   - **A restore:** the account added after the backup is gone; `dev.db.bak` has it; the `.bak` is then listed as restorable.
+>   - **Browse:** a file from elsewhere added once and listed by its path.
+> - **Driven in the app** (the exit check), on the worktree's Debug fixture copy, by messages to gl.exe's own windows:
+>   - **Setup:** a backup copied, then the live company's name changed. The Chart of Accounts page opened and made dirty (WM_SETTEXT into the description).
+>   - **The restore:** the Restore page listed the backup. VK_HOME selected it, and Restore was clicked. The two task dialogs were answered with TDM_CLICK_BUTTON: "Restore backup", then the unsaved page's "Don't save".
+>   - **After:** the Chart of Accounts page was closed and the Restore page still open. `dev.db`'s company was the backup's again, and `dev.db.bak` had the changed name. The program closed normally.
+> - **Checked:** `/checkaccess` passes the page. The screenshot was looked at, which is why a file beside the company file is listed by its name: the whole path was cut off.
+> - **Not driven:** Browse (a file dialog), and a restore that fails.
 
 **Goal:** Restore beside Backup, with the open pages handled first (D7).
 

@@ -95,6 +95,7 @@
     <ClCompile Include="test_ui.cpp" />
     <ClCompile Include="test_cheques.cpp" />
     <ClCompile Include="test_company.cpp" />
+    <ClCompile Include="test_restore.cpp" />
     <ClCompile Include="test_pages.cpp" />
     <ClCompile Include="test_grid.cpp" />
     <ClCompile Include="test_voucher_pages.cpp" />
