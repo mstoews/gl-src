@@ -76,6 +76,9 @@ public:
     virtual unsigned Groups() const = 0;
     virtual TaskOption Option() const { return TaskOption::None; }
     virtual std::string OptionLabel() const { return {}; }
+    // Whether the option changes what's listed (a new date lists again, clearing the checks); Bank
+    // Reconciliation's date doesn't (S9-M3).
+    virtual bool OptionFiltersList() const { return true; }
     std::string option;   // as the page sets it: yyyymmdd, or the period's number
     virtual bool HasPaymentOptions() const { return false; }
     virtual PaymentOptions DefaultPaymentOptions(cb4sqlite::Code4& /*code*/) const { return {}; }
@@ -87,9 +90,25 @@ public:
     virtual TaskStep RunAll(cb4sqlite::Code4& /*code*/, const std::vector<TaskRow>& /*checked*/) { return {}; }
     // "3 vouchers listed, 2 checked."
     virtual std::string Summary(const std::vector<TaskRow>& rows) const;
-    // What a confirmation names before running ("Post 2 vouchers?").
+    // What a confirmation names before running ("Post 2 vouchers?"), and what it adds below that
+    // ("" for the page's own words about running in the background).
     std::string Question(const std::vector<TaskRow>& rows) const;
+    virtual std::string QuestionNote() const { return {}; }
     virtual std::string Noun(int n) const { return n == 1 ? "item" : "items"; }
+
+    // ---- a command on the selected row (spec #9 S9-M3) ----
+    // Renumber a spoiled cheque, void one. Run at once on the page's connection
+    // (one cheque, one transaction), not as a job; the list is loaded again after.
+    virtual std::string RowAction() const { return {}; }                           // the button ("&Void"); "" for none
+    virtual std::string RowQuestion(const TaskRow& /*row*/) const { return {}; }   // asked first; "" asks nothing
+    virtual TaskStep RunRowAction(cb4sqlite::Code4& /*code*/, const TaskRow& /*row*/) { return {false, ""}; }
+    // A number the row command takes (Renumber's new number), beside the buttons.
+    virtual std::string RowInputLabel() const { return {}; }   // "" for none
+    virtual long RowInputDefault(cb4sqlite::Code4& /*code*/) const { return 0; }
+    std::string rowInput;   // as the page sets it
+    // Another command the page offers (Print cheques: 4091, its preview); 0 for none.
+    virtual unsigned short PageCommand() const { return 0; }
+    virtual std::string PageCommandLabel() const { return {}; }
 };
 
 // Runs a task as its job does, on `code`: per item, each checked selectable
@@ -119,3 +138,13 @@ std::unique_ptr<TaskModel> MakePurgeReceivablesTask();
 // that's refused puts the holds back as they were.
 std::unique_ptr<TaskModel> MakeCreateChequesTask(const std::string& payDate);
 std::unique_ptr<TaskModel> MakeBackupTask(const std::string& databaseUtf8, const std::string& todayYyyymmdd);
+// The cheque cycle (spec #9 D5, S9-M3): the made cheques, each checked to be
+// confirmed printed (ConfirmPrinted, one cheque at a time); Renumber on a row
+// (RenumberCheque, the new number beside it, NextChequeNumber to start);
+// Print cheques (4091) opens the cheques' preview.
+std::unique_ptr<TaskModel> MakeChequesTask();
+// Bank Reconciliation (spec #9 D6, S9-M3): the cheques not cleared; the
+// checked printed ones cleared on the option's date (ClearCheque, one at a
+// time); a made one listed with why it can't be; Void on a row (VoidCheque,
+// dated by the same date), asked first.
+std::unique_ptr<TaskModel> MakeBankReconciliationTask();

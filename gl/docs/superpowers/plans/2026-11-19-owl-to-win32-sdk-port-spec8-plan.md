@@ -466,7 +466,7 @@ S is less than a day, M is 1–3 days, L is 3–6 days. **Parallel work:** M2, M
 >   - **Results:** refusals go on the rows; the result names what was made ("Made GL voucher 1301 (AP, period 7) ...").
 >   - **Classic entries:** each dialog stays as a "(classic)" entry (`CM_TK_*_CLASSIC`, 20524 to 20541).
 >   - **Not task pages yet** (their dialogs stay):
->     - Print Cheques and Confirm Printed Cheques, which print;
+>     - Print Cheques and Confirm Printed Cheques, which print (*corrected by spec #9 S9-M3:* Confirm Printed Cheques doesn't print; Print Cheques is a report in a preview tab);
 >     - Restore, which closes and reopens the company file;
 >     - Bank Reconciliation.
 >

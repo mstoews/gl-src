@@ -3,7 +3,7 @@
 **Spec reference:** `gl/docs/superpowers/specs/2026-11-19-owl-to-win32-sdk-port-spec8-design.md`, §5.1 (list and detail) and §5.3 (task pages). This plan adds no design of its own beyond the decisions in [Decisions](#decisions) below.
 **Gap:** G3 of `gl/docs/superpowers/specs/2026-11-19-spec8-acceptance.md` ("Budget Data, Company Profile's accounts and banks, Print Cheques, Confirm Printed Cheques, Restore and Bank Reconciliation are still dialogs." Deferred: a later spec).
 **Date:** 2026-11-20
-**Plan status:** Reviewed; Q1–Q4 answered (2026-11-20). S9-M0 to S9-M2 built.
+**Plan status:** Reviewed; Q1–Q4 answered (2026-11-20). S9-M0 to S9-M3 built.
 
 **Paths:** relative to the repository root. The screens today:
 
@@ -44,7 +44,7 @@ This plan finishes the Spec #8 design for the screens it didn't move. If a miles
 | D2 | **`EntryGridModel` gains a fixed-rows mode:** no blank row at the end, no Insert or Ctrl+Delete, every row's read-only columns kept. Budget Data, the periods and the eight accounts use it. | The three grids have a fixed number of rows. The model is shared, so the change is tested once. |
 | D3 | **Company Profile is one page with four tabs:** Company (GL_PROF, the fiscal year shown, the data path, the `[WITHHOLDING] TAX` setting), Periods (GL_PDS, 12 rows: start, end, description, closed), Accounts (the eight GL_SETAT GL rows, each an account lookup) and Banks (a grid of GL_SETAT TYPE="CA": account, dept and name; *changed in S9-M2* from "a list and detail", see its note). **Save** writes the tabs that changed, each through the code its dialog uses. No `closeAll` (Spec #8 D7). | §5.1 named the accounts and banks; the company and periods share the screen today, and splitting them would scatter one screen over four commands. |
 | D4 | **The rules don't change:** Periods saves without checks, as 1028 does; Accounts refuses an account that isn't in the chart (8121); Banks asks nothing on a change (Spec #8 D9), and a row is removed with Ctrl+Delete and Save, as a voucher line is (*changed in S9-M2*: no 6024 question); "Reset the depreciation journal flag" is a command on the Periods tab, asking as 6025 does. | Spec #8 principle 1. Any new period check is Q1. |
-| D5 | **The cheque cycle is one task page,** "Cheques", with three steps in a row: **Print** (opens 4091's preview tab, as today), **Confirm printed** (Confirm Printed Cheques: the made cheques listed, the first and last that printed, one action through `ConfirmPrinted`), and **Renumber** (a row's command, through `RenumberCheque`). 4091 and 8074 both open it; 4091 keeps opening the preview too (Q3). | Print and Confirm are one job for the user, done one after the other. Print stays the report it is. |
+| D5 | **The cheque cycle is one task page,** "Cheques", with three steps in a row: **Print** (opens 4091's preview tab, as today), **Confirm printed** (Confirm Printed Cheques: the made cheques listed with check boxes, each checked one confirmed through `ConfirmPrinted`; *changed in S9-M3* from "the first and last that printed", see its note), and **Renumber** (a row's command, through `RenumberCheque`). 4091 and 8074 both open it; 4091 keeps opening the preview too (Q3). | Print and Confirm are one job for the user, done one after the other. Print stays the report it is. |
 | D6 | **Bank Reconciliation is a task page:** the cheques not cleared, with check boxes, a date, and **Clear**, which calls `ClearCheque` once per checked cheque with that date (each its own transaction, as Spec #8 M4's Post does). **Void** is a row's command, asking as today, through `VoidCheque`. Refusals (not confirmed printed; a closed period) go on the row. | Clearing a statement's worth of cheques one dialog at a time is the slowest part of today's screen; the core is called the same way, once per cheque. |
 | D7 | **Restore is a task page,** beside Backup: the file (a Browse button and the file's checks from `CheckRestoreFile`, shown before the action), the consequence in plain words, and **Restore from <file>**. It runs on the UI thread, not as a job, because it closes `cb`. Before it runs, every other page is closed: pages with unsaved changes are listed and asked about once, as closing the program does; Home and the Restore page stay. After it, the workspace broadcasts every data group changed and reapplies rights, as the frame does today. | Restore replaces the database under everything; closing the other pages first is the only safe order. |
 | D8 | **Every new write joins the job gate:** the budget save, Company Profile's Save, Confirm, Renumber, Clear and Void stop while a job writes, with the job's name in the information bar (Spec #8 M4's rule); Restore stays in `IsWritingCommand`. | Writes are serialised (Spec #8 §9.1). Today these dialogs aren't gated. |
@@ -230,6 +230,40 @@ S is less than a day, M is 1–3 days. **Parallel work:** M3 and M4 need only Sp
 
 ## Milestone 3 — The Cheques page and Bank Reconciliation
 
+> **As built (2026-11-20; built and run on Windows 11, VS 18, v145).**
+> - **Read** (task 1): Confirm Printed Cheques doesn't print. Its dialog lists the made cheques, confirms a From-To range and renumbers a spoiled one. The Spec #8 plan's M4 note said it prints; that note is corrected there.
+> - **The task form gains a row's command** (`TaskModel::RowAction`, `RowQuestion`, `RunRowAction`):
+>   - **The button** `IDC_TK_ROW` acts on the selected row. It runs at once on the page's connection, one cheque in one transaction, after the job gate; the list is loaded again after.
+>   - **A number** for it (`RowInputLabel`, `RowInputDefault`; `IDC_TK_LROWIN`, `IDC_TK_ROWIN`).
+>   - **A second command** the page offers (`PageCommand`; `IDC_TK_PAGECMD`), which the page posts to the frame.
+>   - **Placing:** the form has them on its first row, hidden for the other tasks. A row command with no page command takes that command's place.
+>   - **The confirmation's text:** `QuestionNote()` replaces the "runs in the background" line in the confirmation.
+>   - **An option that isn't a filter:** `OptionFiltersList()` false, so changing it doesn't list again (which would clear the checks).
+> - **The Cheques page** (8074, `MakeChequesTask`; task 2):
+>   - **The list:** the made ("P") cheques (cheque, vendor and name, date, amount), all checked.
+>   - **Confirm printed** confirms each checked cheque with `ConfirmPrinted(n, n)`, one at a time. Its question says checked cheques can't be renumbered after.
+>   - **Renumber** takes the selected cheque and the **New number** (it starts at `NextChequeNumber`), through `RenumberCheque`, with 8074's three messages on the information bar.
+>   - **Print cheques** sends 4091 to the frame, which opens the preview (Q3).
+>   - **Deviation from D5 and task 2:** check boxes, not From and To. A spoiled cheque in the middle of a run can be left unchecked and renumbered, which the range couldn't do. Each cheque is its own transaction, where the range was one. D5 is corrected above.
+> - **The Bank Reconciliation page** (6085, `MakeBankReconciliationTask`; task 3):
+>   - **The list:** the cheques not cleared (cheque, vendor, state, bank, amount), none checked to start.
+>   - **A made cheque** has no check box, with the note "Not confirmed printed: confirm it on the Cheques page."
+>   - **Date** is the clear's, and a void's, as 1051 had one Date for both. **Clear** clears each checked cheque with `ClearCheque`, one at a time, with progress.
+>   - **Void** asks a task dialog naming the cheque, vendor, amount and date, then calls `VoidCheque`. Its result, or its closed-period refusal, goes on the information bar.
+> - **The commands** (task 4):
+>   - 8074 opens the Cheques page and 6085 the Bank Reconciliation page.
+>   - "Confirm Printed Cheques (classic)" (`CM_TK_CONFIRM_CLASSIC` 20547) and "Bank Reconciliation (classic)" (`CM_TK_BANKREC_CLASSIC` 20548) open the dialogs.
+>   - Both are writing commands now, so a job running greys them (D8).
+>   - The home page's "cheques to print" tile opens the Cheques page.
+> - **Tests** (task 5; `gl_tests/test_cheques.cpp`, 4 cases; `gl_tests` 235). Each is compared table by table (`ap_dist`, `ap_reqst`, `ap_jsum`) with the classic calls on a second fixture copy.
+>   - **Renumber:** refused with no number, and with one in use; then renumbered.
+>   - **Confirm printed:** every cheque; and an unchecked cheque left unconfirmed.
+>   - **Bank Reconciliation:** made cheques listed with why; one printed cheque cleared on 11/15/2026.
+>   - **Void:** asked, then voided, with 1051's message.
+>   - **A fixture note:** the fixture already has a printed cheque (5001), which the tests count rather than assume away.
+> - **Checked:** `/checkaccess` passes both pages (names, Tab, order, access keys). The screenshots of both were looked at. The Spec #5 sheet's redesign table has criterion 7's steps 2-4 and criterion 8's steps 1-2.
+> - **Not driven in the app:** Renumber, Void and Print cheques from the page (the drive sends no keystrokes; the model tests cover the writes).
+
 **Goal:** the AP cheque cycle on task pages (D5, D6).
 
 ### Tasks
@@ -238,7 +272,7 @@ S is less than a day, M is 1–3 days. **Parallel work:** M3 and M4 need only Sp
 2. **The Cheques page** (`TaskModels`, a new task):
    - the made ("P") cheques listed: cheque, vendor and name, date, amount;
    - **Print cheques:** opens 4091's preview tab;
-   - **Confirm printed:** From and To, filled with the first and last numbers as today; the action is named for the range ("Confirm cheques 1001 to 1004") and asks today's question, then `ConfirmPrinted` in one transaction (as today, not per cheque);
+   - **Confirm printed:** From and To, filled with the first and last numbers as today; the action is named for the range ("Confirm cheques 1001 to 1004") and asks today's question, then `ConfirmPrinted` in one transaction (as today, not per cheque) (*as built: check boxes, one cheque at a time; see the note*);
    - **Renumber:** on a selected row, with the new number; `RenumberCheque`'s messages on the information bar.
 3. **The Bank Reconciliation page:** the cheques not cleared (Made and Printed), with check boxes and a date; **Clear N cheques** calls `ClearCheque` per checked cheque, with progress; a Made cheque has no check box, with why ("Not confirmed printed: confirm it on the Cheques page."); **Void** on a row asks as today and calls `VoidCheque`, its result and its closed-period refusal on the information bar.
 4. **The commands:** 8074 and the Cheques page's own entry open the Cheques page; 6085 opens Bank Reconciliation; their "(classic)" entries open the dialogs (D9). Both pages' actions take the job gate (D8). The home page's Print Cheques tile opens the Cheques page.

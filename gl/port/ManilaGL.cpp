@@ -326,10 +326,10 @@ bool ManilaGL::OnCommand(WORD id, WORD code, HWND ctl)
     case CM_APINVOICE_CLASSIC:             // (4044) TManilaGL::APBatch (ID_APBATCH): Transactions > Purchase Invoice Vouchers, toolbar (S5-M2)
         RunApInvoiceEntry(hwnd());
         return true;
-    case 8074:                             // TManilaGL::APChequeAP: Confirm Printed Cheques (S5-M6, D9)
+    case CM_TK_CONFIRM_CLASSIC:            // (8074) TManilaGL::APChequeAP: Confirm Printed Cheques (S5-M6, D9); 8074 is the Cheques page
         RunApConfirmCheques(hwnd());
         return true;
-    case 6085:                             // TManilaGL::APPayment: Bank Reconciliation (S5-M6)
+    case CM_TK_BANKREC_CLASSIC:            // (6085) TManilaGL::APPayment: Bank Reconciliation (S5-M6); 6085 is its task page
         RunApBankReconciliation(hwnd());
         return true;
     case CM_TK_PURGEAP_CLASSIC:            // (1066) TManilaGL::APPurgeAccts: Maintenance > Purge Paid Payables (S5-M6)
