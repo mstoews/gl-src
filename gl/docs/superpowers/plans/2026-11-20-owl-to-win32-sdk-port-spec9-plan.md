@@ -3,7 +3,7 @@
 **Spec reference:** `gl/docs/superpowers/specs/2026-11-19-owl-to-win32-sdk-port-spec8-design.md`, §5.1 (list and detail) and §5.3 (task pages). This plan adds no design of its own beyond the decisions in [Decisions](#decisions) below.
 **Gap:** G3 of `gl/docs/superpowers/specs/2026-11-19-spec8-acceptance.md` ("Budget Data, Company Profile's accounts and banks, Print Cheques, Confirm Printed Cheques, Restore and Bank Reconciliation are still dialogs." Deferred: a later spec).
 **Date:** 2026-11-20
-**Plan status:** Draft, for review. Nothing built.
+**Plan status:** Reviewed; Q1–Q4 answered (2026-11-20). Nothing built.
 
 **Paths:** relative to the repository root. The screens today:
 
@@ -52,14 +52,14 @@ This plan finishes the Spec #8 design for the screens it didn't move. If a miles
 
 ---
 
-## Open questions
+## Questions (answered 2026-11-20)
 
-They stay as assumed until answered.
+The user confirmed each assumption.
 
-- **Q1 Period checks.** 1028 saves any dates, overlapping or out of order. Should the Periods tab refuse a period that ends before it starts, or overlaps the next? *Assumed: no; the rules don't change (D4). A check would be added to a core with a test.*
-- **Q2 Restore and open pages.** Close the other pages (D7), or refuse to restore until the user closes them? *Assumed: close them, asking once about unsaved changes.*
-- **Q3 Print Cheques' command.** Should 4091 open the Cheques page (with Print as its first step), or keep opening the preview straight away? *Assumed: the preview, as today; the Cheques page has its own entry.*
-- **Q4 Bank reconciliation by statement.** One date for every cheque cleared at once (D6), or a date per cheque? *Assumed: one date per Clear; a cheque cleared on another date is cleared in its own run.*
+- **Q1 Period checks.** 1028 saves any dates, overlapping or out of order. Should the Periods tab refuse a period that ends before it starts, or overlaps the next? **No:** the rules don't change (D4).
+- **Q2 Restore and open pages.** Close the other pages (D7), or refuse to restore until the user closes them? **Close them,** asking once about unsaved changes.
+- **Q3 Print Cheques' command.** Should 4091 open the Cheques page (with Print as its first step), or keep opening the preview straight away? **The preview, as today;** the Cheques page has its own entry.
+- **Q4 Bank reconciliation by statement.** One date for every cheque cleared at once (D6), or a date per cheque? **One date per Clear;** a cheque cleared on another date is cleared in its own run.
 
 ---
 
