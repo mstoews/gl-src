@@ -79,9 +79,16 @@ void EntryGridModel::SetCell(int row, const std::string& key, const std::string&
     SetCell(row, ColumnOf(key), text);
 }
 
+void EntryGridModel::SetFixedRows(int count)
+{
+    fixed_ = std::max(0, count);
+    Clear();
+}
+
 void EntryGridModel::Clear()
 {
     rows_.clear();
+    if (fixed_ > 0) rows_.assign(static_cast<size_t>(fixed_), std::vector<std::string>(columns_.size()));
     removed_.clear();
     editing_ = false;
     edit_.clear();
@@ -96,9 +103,11 @@ void EntryGridModel::SetRows(const std::vector<std::vector<std::string>>& rows)
     rows_.clear();
     removed_.clear();
     for (std::vector<std::string> r : rows) {
+        if (fixed_ > 0 && Rows() == fixed_) break;
         r.resize(columns_.size());
         rows_.push_back(std::move(r));
     }
+    while (fixed_ > 0 && Rows() < fixed_) rows_.push_back(std::vector<std::string>(columns_.size()));
     editing_ = false;
     row_ = 0;
     col_ = std::max(0, nextEditable(-1, 1));
@@ -180,6 +189,8 @@ GridAction EntryGridModel::Move(int step)
         if (row_ + 1 < Rows()) {
             ++row_;
             col_ = std::max(0, nextEditable(-1, 1));
+        } else if (fixed_ > 0) {
+            // The last row's last cell: stay.
         } else {
             col_ = std::max(0, nextEditable(-1, 1));   // the blank row: back to its first cell
         }
@@ -217,12 +228,12 @@ GridAction EntryGridModel::Key(GridKey key)
         CancelEdit();
         return GridAction::Cancelled;
     case GridKey::Insert:
-        if (editing_) return GridAction::None;
+        if (editing_ || fixed_ > 0) return GridAction::None;
         rows_.insert(rows_.begin() + row_, std::vector<std::string>(columns_.size()));
         Changed();
         return GridAction::Inserted;
     case GridKey::CtrlDelete:
-        if (editing_ || (IsBlank(row_) && row_ == Rows() - 1)) return GridAction::None;
+        if (editing_ || fixed_ > 0 || (IsBlank(row_) && row_ == Rows() - 1)) return GridAction::None;
         removed_.push_back({row_, rows_[static_cast<size_t>(row_)]});
         rows_.erase(rows_.begin() + row_);
         EnsureBlankRow();
@@ -230,7 +241,7 @@ GridAction EntryGridModel::Key(GridKey key)
         Changed();
         return GridAction::Removed;
     case GridKey::CtrlZ: {
-        if (editing_ || removed_.empty()) return GridAction::None;
+        if (editing_ || fixed_ > 0 || removed_.empty()) return GridAction::None;
         auto [at, cells] = removed_.back();
         removed_.pop_back();
         at = std::min(at, Rows() - 1);   // before the blank row at most
@@ -275,6 +286,7 @@ std::vector<std::vector<std::string>> EntryGridModel::undo() const
 
 void EntryGridModel::EnsureBlankRow()
 {
+    if (fixed_ > 0) return;   // no blank row to type into
     if (rows_.empty() || !IsBlank(Rows() - 1)) rows_.push_back(std::vector<std::string>(columns_.size()));
 }
 

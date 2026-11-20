@@ -18,6 +18,13 @@
 //     rights are read at the next login, as for every other change here.
 //   - Fixed Assets: Dispose... opens Fixed Assets > Disposal (6035) for the
 //     asset; the list then shows it disposed.
+//   - Tabs (spec #9 S9-M0): a page's tabs sit below its groups, a strip with
+//     no body; choosing one shows its controls and hides the others'. A grid
+//     tab is an fx::EntryGrid over the model's Grid(key). Save commits the
+//     grid's edit first, and a field refused on a hidden tab brings its tab
+//     forward. The tab check page (IDD_PG_TABCHECK) has a tab of fields and a
+//     grid tab over an in-memory record, for /checkres and /stress; no
+//     command opens it.
 //
 #include "RecordPage.h"
 
@@ -159,6 +166,16 @@ public:
     }
     void SelectShown(int row) { SelectRow(row); }
     int shownCount() const { return static_cast<int>(shown_.size()); }
+    // /stress: choose a tab; type into the current cell of its grid, then Tab.
+    void ChooseTab(int tab) { ShowTab(tab); }
+    void TypeInGrid(int tab, const std::string& text)
+    {
+        if (tab < 0 || static_cast<size_t>(tab) >= d_.tabs.size()) return;
+        const auto it = grids_.find(d_.tabs[static_cast<size_t>(tab)].grid);
+        if (it == grids_.end()) return;
+        it->second->Type(text);
+        it->second->Press(m::GridKey::Tab);
+    }
 
 protected:
     bool OnInitPage() override;
@@ -186,6 +203,9 @@ private:
     void OnButton(int id);
     fx::Lookup* lookupOf(int id);
     UsersModel* users() { return d_.commands ? static_cast<UsersModel*>(model_.get()) : nullptr; }
+    void ShowTab(int tab);
+    int TabOf(int id) const;   // -1: not on a tab
+    bool CommitGrids();
 
     const PageDesc& d_;
     WORD command_;
@@ -194,7 +214,8 @@ private:
     std::map<int, std::unique_ptr<fx::Lookup>> lookups_;            // account edit -> its lookup
     std::map<int, std::vector<std::string>> choices_;                // combo -> the values, by index
     std::vector<size_t> shown_;                                      // list row -> model row
-    HWND list_ = nullptr, commands_ = nullptr;
+    HWND list_ = nullptr, commands_ = nullptr, tabs_ = nullptr;
+    std::map<int, std::unique_ptr<fx::EntryGrid>> grids_;           // a tab's grid ListView -> its grid
     bool selecting_ = false;
 };
 
@@ -293,6 +314,33 @@ bool RecordPage::OnInitPage()
         ListView_InsertColumn(commands_, 0, &c);
         ListView_EnableGroupView(commands_, TRUE);
     }
+    if (!d_.tabs.empty()) {
+        tabs_ = Item(kPageTabs);
+        for (size_t i = 0; i < d_.tabs.size(); ++i) {
+            TCITEMW t{};
+            t.mask = TCIF_TEXT;
+            t.pszText = const_cast<wchar_t*>(d_.tabs[i].caption);
+            TabCtrl_InsertItem(tabs_, static_cast<int>(i), &t);
+            if (!d_.tabs[i].grid) continue;
+            m::EntryGridModel* g = model_->Grid(d_.tabs[i].gridKey);
+            if (!g) continue;
+            auto grid = std::make_unique<fx::EntryGrid>();
+            grid->Attach(Item(d_.tabs[i].grid), g);
+            fx::SetAccessibleName(Item(d_.tabs[i].grid), std::wstring(d_.tabs[i].caption) + L" grid");
+            fx::EntryGrid* gp = grid.get();
+            g->OnChanged = [this, gp] {
+                if (filling()) return;
+                SetDirty(true);
+                gp->Refresh();
+            };
+            grid->OnAction = [this, gp](m::GridAction a) {
+                if (a == m::GridAction::Refused) ShowInfo(fx::InfoKind::Error, wide(gp->model()->message()));
+                else if (a == m::GridAction::Committed) HideInfo();
+            };
+            grids_[d_.tabs[i].grid] = std::move(grid);
+        }
+        ShowTab(0);
+    }
     model_->Load();
     model_->New();
     ShowList();
@@ -381,6 +429,7 @@ void RecordPage::Fill()
         users()->ShowLevel(model_->Get("level"));
         FillCommands();
     }
+    for (auto& [id, grid] : grids_) grid->Refresh();
     EnableWindow(Item(IDC_PG_DELETE), !model_->isNew());
     for (const ButtonDesc& b : d_.buttons) EnableWindow(Item(b.id), !model_->isNew());
     ClearMarks();
@@ -482,17 +531,26 @@ void RecordPage::OnFieldChanged(int id)
 bool RecordPage::Save()
 {
     if (SaveWaitsForJob(*this)) return false;
+    if (!CommitGrids()) return false;
     Read();
     bool ok = true;
+    int firstBad = 0;
     for (const FieldDesc& f : d_.fields)
-        if (isEditable(f) && f.kind != FieldKind::Choice && f.kind != FieldKind::Date) ok = Validate(f.id) && ok;
+        if (isEditable(f) && f.kind != FieldKind::Choice && f.kind != FieldKind::Date && !Validate(f.id)) {
+            if (ok) firstBad = f.id;
+            ok = false;
+        }
     if (!ok) {
+        if (TabOf(firstBad) >= 0) ShowTab(TabOf(firstBad));
         ShowInfo(fx::InfoKind::Error, L"Check the marked fields: hover over one to see what's wrong.");
         return false;
     }
     const RecordModel::Result r = model_->Save();
     if (!r.ok) {
-        if (const FieldDesc* f = fieldOfKey(r.field)) MarkField(f->id, r.message, true);
+        if (const FieldDesc* f = fieldOfKey(r.field)) {
+            if (TabOf(f->id) >= 0) ShowTab(TabOf(f->id));
+            MarkField(f->id, r.message, true);
+        }
         ShowInfo(fx::InfoKind::Error, wide(r.message));
         return false;
     }
@@ -500,6 +558,41 @@ bool RecordPage::Save()
     ShowList();
     ShowInfo(fx::InfoKind::Success, wide(r.message));
     NotifyDataChanged(data_group::kMasters, hwnd());   // spec #8 9.3
+    return true;
+}
+
+void RecordPage::ShowTab(int tab)
+{
+    if (!tabs_ || tab < 0 || static_cast<size_t>(tab) >= d_.tabs.size()) return;
+    TabCtrl_SetCurSel(tabs_, tab);
+    for (size_t i = 0; i < d_.tabs.size(); ++i)
+        if (static_cast<int>(i) != tab)
+            for (int id : d_.tabs[i].ids) ShowWindow(Item(id), SW_HIDE);
+    for (int id : d_.tabs[static_cast<size_t>(tab)].ids) ShowWindow(Item(id), SW_SHOW);
+}
+
+int RecordPage::TabOf(int id) const
+{
+    for (size_t i = 0; i < d_.tabs.size(); ++i)
+        if (std::find(d_.tabs[i].ids.begin(), d_.tabs[i].ids.end(), id) != d_.tabs[i].ids.end())
+            return static_cast<int>(i);
+    return -1;
+}
+
+// Ends an edit in a tab's grid before saving: false (its tab shown, and why) if the cell's text is refused.
+bool RecordPage::CommitGrids()
+{
+    for (auto& [id, grid] : grids_) {
+        m::EntryGridModel* g = grid->model();
+        if (!g || !g->editing()) continue;
+        if (grid->editing()) grid->Press(m::GridKey::Tab);
+        else g->Commit();
+        if (g->editing()) {
+            if (TabOf(id) >= 0) ShowTab(TabOf(id));
+            ShowInfo(fx::InfoKind::Error, wide(g->message()));
+            return false;
+        }
+    }
     return true;
 }
 
@@ -625,6 +718,13 @@ bool RecordPage::OnFormCommand(WORD id, WORD code, HWND)
 
 bool RecordPage::OnFormNotify(NMHDR* nm, LRESULT& result)
 {
+    if (tabs_ && nm->hwndFrom == tabs_) {
+        if (nm->code == TCN_SELCHANGE) ShowTab(TabCtrl_GetCurSel(tabs_));
+        result = 0;
+        return true;
+    }
+    for (auto& [id, grid] : grids_)
+        if (grid->OnNotify(nm, result)) return true;
     if (nm->code == DTN_DATETIMECHANGE && !filling()) {
         SetDirty(true);
         ClearMark(static_cast<int>(nm->idFrom));
@@ -692,6 +792,73 @@ bool RecordPage::OnMessage(UINT msg, WPARAM wp, LPARAM lp, LRESULT& result)
     return fx::Page::OnMessage(msg, wp, lp, result);
 }
 
+// The tab check page's record (spec #9 S9-M0): in memory, a code, a name, a
+// Details tab (a note, an amount, an account) and a Budget tab (12 periods).
+// Its grid is Budget Data's (spec #9 D1, D2), so the check is the real shape.
+class TabCheckModel : public RecordModel {
+public:
+    explicit TabCheckModel(cb4sqlite::Code4& code) : RecordModel(code)
+    {
+        grid_.SetColumns({{"period", "Period", m::CellKind::Number, 6, true},
+                          {"budget", "Budget", m::CellKind::Amount, 16},
+                          {"current", "Current Year", m::CellKind::Amount, 16, true},
+                          {"previous", "Previous Year", m::CellKind::Amount, 16, true}});
+        grid_.SetFixedRows(12);
+        store_["A1"] = {{"code", "A1"}, {"name", "First"}, {"note", "a note"}, {"amount", "1,250.00"}};
+        store_["B2"] = {{"code", "B2"}, {"name", "Second"}};
+    }
+    std::string Noun() const override { return "check record"; }
+    m::EntryGridModel* Grid(const std::string& key) override { return key == "budget" ? &grid_ : nullptr; }
+
+protected:
+    std::vector<RecordRow> LoadRows() override
+    {
+        std::vector<RecordRow> rows;
+        for (const auto& [key, v] : store_) rows.push_back({key, {key, value(v, "name")}});
+        return rows;
+    }
+    bool Read(const std::string& key, Values& out) override
+    {
+        const auto it = store_.find(key);
+        if (it == store_.end()) return false;
+        out = it->second;
+        return true;
+    }
+    std::string KeyOf(const Values& v) const override { return value(v, "code"); }
+    std::string KeyField() const override { return "code"; }
+    Result Write(Values& v, bool) override
+    {
+        Values stored = v;
+        for (int r = 0; r < grid_.Rows(); ++r) stored["budget" + std::to_string(r + 1)] = grid_.Cell(r, "budget");
+        store_[value(v, "code")] = stored;
+        return {true, "", ""};
+    }
+    Result Remove(const std::string& key) override
+    {
+        store_.erase(key);
+        return {true, "", ""};
+    }
+    void LoadGrids(const std::string& key) override
+    {
+        const auto it = store_.find(key);
+        std::vector<std::vector<std::string>> rows;
+        for (int r = 1; r <= 12; ++r)
+            rows.push_back({std::to_string(r),
+                            it == store_.end() ? std::string() : value(it->second, "budget" + std::to_string(r))});
+        grid_.SetRows(rows);
+    }
+
+private:
+    m::EntryGridModel grid_;
+    std::map<std::string, Values> store_;
+};
+
+const PageEntry& tabCheckEntry()
+{
+    static const PageEntry e{0, &k_tabCheck, [] { return std::make_unique<TabCheckModel>(cb); }, 0, L""};
+    return e;
+}
+
 // Owns itself: deleted after its window goes.
 class OwnedRecordPage : public RecordPage {
 public:
@@ -714,23 +881,31 @@ bool IsRecordPageCommand(WORD command)
     return entryOf(command) != nullptr;
 }
 
-HWND OpenRecordPage(fx::PageHost& host, WORD command)
+namespace {
+
+HWND openEntry(fx::PageHost& host, const PageEntry& e)
 {
-    const PageEntry* e = entryOf(command);
-    if (!e) return nullptr;
-    const auto it = gOpen.find(command);
+    const auto it = gOpen.find(e.command);
     if (it != gOpen.end() && IsWindow(it->second)) {
         host.ActivatePage(it->second);
         return it->second;
     }
-    auto* page = new OwnedRecordPage(*e);
-    HWND h = page->Open(host, e->desc->title);
+    auto* page = new OwnedRecordPage(e);
+    HWND h = page->Open(host, e.desc->title);
     if (!h) {
         delete page;
         return nullptr;
     }
-    gOpen[command] = h;
+    gOpen[e.command] = h;
     return h;
+}
+
+} // namespace
+
+HWND OpenRecordPage(fx::PageHost& host, WORD command)
+{
+    const PageEntry* e = entryOf(command);
+    return e ? openEntry(host, *e) : nullptr;
 }
 
 const std::vector<ClassicCommand>& ClassicCommands()
@@ -747,6 +922,7 @@ std::vector<const PageDesc*> RecordPageDescs()
 {
     std::vector<const PageDesc*> v;
     for (const PageEntry& e : entries()) v.push_back(e.desc);
+    v.push_back(tabCheckEntry().desc);   // spec #9 S9-M0
     return v;
 }
 
@@ -775,7 +951,19 @@ int StressRecordPages(int times)
             w.ClosePage(h);
             if (IsWindow(h)) return false;
         }
-        return true;
+        // The tab check page (spec #9 S9-M0): each tab, the budget typed into and saved.
+        HWND h = openEntry(w, tabCheckEntry());
+        auto* p = dynamic_cast<RecordPage*>(fx::Window::FromHandle(h));
+        if (!p) return false;
+        p->SelectShown(0);
+        p->ChooseTab(1);
+        p->TypeInGrid(1, "125");
+        p->ChooseTab(0);
+        if (p->IsDirty() && !p->Save()) return false;   // saved, so choosing another asks nothing
+        p->SelectShown(1);
+        p->ChooseTab(1);
+        w.ClosePage(h);
+        return !IsWindow(h);
     };
     if (!once()) {   // first open: class registration, the theme
         DestroyWindow(w.hwnd());

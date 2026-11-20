@@ -40,6 +40,15 @@ struct ButtonDesc {
     const wchar_t* text;
 };
 
+// A tab below the record's groups (spec #9 S9-M0): its own fields, or a grid
+// (an entry grid over the model's RecordModel::Grid(gridKey)).
+struct TabDesc {
+    const wchar_t* caption;
+    int grid;              // the grid's ListView, or 0
+    const char* gridKey;   // RecordModel::Grid's argument
+    std::vector<int> ids;  // every control on the tab, shown only while it's chosen
+};
+
 struct PageDesc {
     UINT form;
     const wchar_t* title;
@@ -48,9 +57,10 @@ struct PageDesc {
     std::vector<FieldDesc> fields;
     std::vector<std::pair<int, unsigned>> anchors;
     std::vector<ButtonDesc> buttons;   // the page's own, after Delete
+    std::vector<TabDesc> tabs;         // none, or the tab strip's tabs
 };
 
-constexpr int kPageFilter = 21000, kPageList = 21001, kPageCommands = 21002;
+constexpr int kPageFilter = 21000, kPageList = 21001, kPageCommands = 21002, kPageTabs = 21004;
 
 // ---- the pages (RecordPages.cpp) -------------------------------------------
 
@@ -73,5 +83,6 @@ const std::vector<ClassicCommand>& ClassicCommands();
 std::vector<const PageDesc*> RecordPageDescs();
 
 // /stress: each page opened in a hidden workspace, filtered, two records
-// selected and closed, `times` times. GDI + USER object growth, or -1.
+// selected and closed, `times` times; the tab check page (S9-M0) too, each
+// tab chosen and its grid typed into. GDI + USER object growth, or -1.
 int StressRecordPages(int times);

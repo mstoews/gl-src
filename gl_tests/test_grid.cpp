@@ -1,7 +1,7 @@
 //
 // gl_tests: the entry grid's model (spec #8 6.4; plan S8-M3 task 7): every
 // key in every column kind, validation, totals in cents, balancing, and
-// undoing a removed line.
+// undoing a removed line; fixed rows (S9-M0).
 //
 #include "catch_amalgamated.hpp"
 
@@ -169,4 +169,79 @@ TEST_CASE("Entry grid: Insert, Ctrl+Delete and Ctrl+Z (S8-M3)", "[grid]")
     CHECK(g.Key(GridKey::CtrlDelete) == GridAction::None);      // the last blank row stays
     REQUIRE(g.BeginEdit());
     CHECK(g.Key(GridKey::Insert) == GridAction::None);          // not while editing
+}
+
+namespace {
+
+// Budget Data's grid (spec #9 D1, D2): 12 periods, the budget edited.
+m::EntryGridModel budgetGrid()
+{
+    m::EntryGridModel g({
+        {"period", "Period", m::CellKind::Number, 6, true},
+        {"budget", "Budget", m::CellKind::Amount, 16},
+        {"current", "Current Year", m::CellKind::Amount, 16, true},
+        {"previous", "Previous Year", m::CellKind::Amount, 16, true},
+    });
+    g.SetFixedRows(12);
+    return g;
+}
+
+} // namespace
+
+TEST_CASE("Entry grid: fixed rows have no blank row and no Insert or Ctrl+Delete (S9-M0)", "[grid]")
+{
+    m::EntryGridModel g = budgetGrid();
+    CHECK(g.fixedRows() == 12);
+    CHECK(g.Rows() == 12);
+    CHECK(g.Lines() == 0);
+    CHECK(g.col() == 1);   // the first editable column
+
+    // SetRows pads to the count, and cuts what's beyond it.
+    g.SetRows({{"1", "100.00", "90.00", "80.00"}, {"2", "200.00"}});
+    CHECK(g.Rows() == 12);
+    CHECK(g.Lines() == 2);
+    std::vector<std::vector<std::string>> thirteen;
+    for (int i = 1; i <= 13; ++i) thirteen.push_back({std::to_string(i)});
+    g.SetRows(thirteen);
+    CHECK(g.Rows() == 12);
+    CHECK(g.Cell(11, "period") == "12");
+
+    // Typing into the last row adds no row below it.
+    g.SetCurrent(11, 1);
+    CHECK(type(g, "1250", GridKey::Enter) == GridAction::Committed);
+    CHECK(g.Cell(11, "budget") == "1,250.00");
+    CHECK(g.Rows() == 12);
+    CHECK(g.row() == 11);   // the last row's last editable cell: Enter stays
+    CHECK(g.col() == 1);
+    CHECK(g.Key(GridKey::Tab) == GridAction::Moved);
+    CHECK(g.row() == 11);
+    CHECK(g.Key(GridKey::Down) == GridAction::None);
+
+    // Tab moves down the periods, skipping the read-only columns.
+    g.SetCurrent(0, 1);
+    CHECK(g.Key(GridKey::Tab) == GridAction::Moved);
+    CHECK(g.row() == 1);
+    CHECK(g.col() == 1);
+    CHECK(g.Key(GridKey::ShiftTab) == GridAction::Moved);
+    CHECK(g.row() == 0);
+
+    // No lines are added or removed.
+    CHECK(g.Key(GridKey::Insert) == GridAction::None);
+    CHECK(g.Key(GridKey::CtrlDelete) == GridAction::None);
+    CHECK(g.Key(GridKey::CtrlZ) == GridAction::None);
+    CHECK(g.Rows() == 12);
+    g.SetCell(5, "budget", "");
+    CHECK(g.Rows() == 12);
+
+    // The totals still sum the column; Clear gives 12 blank rows.
+    g.SetRows({{"1", "100.00"}, {"2", "200.50"}});
+    CHECK(g.Total("budget") == 30050);
+    g.Clear();
+    CHECK(g.Rows() == 12);
+    CHECK(g.Lines() == 0);
+
+    // Back to the usual grid: the blank row returns.
+    g.SetFixedRows(0);
+    CHECK(g.Rows() == 1);
+    CHECK(g.Key(GridKey::Insert) == GridAction::Inserted);
 }
