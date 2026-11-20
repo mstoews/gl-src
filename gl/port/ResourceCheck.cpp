@@ -666,6 +666,32 @@ std::vector<WORD> pageCommands()
     return v;
 }
 
+// A page's Tab control (spec #9 S9-M0), or null.
+HWND pageTabs(HWND form)
+{
+    for (HWND k = GetWindow(form, GW_CHILD); k; k = GetWindow(k, GW_HWNDNEXT)) {
+        wchar_t cls[32] = {};
+        GetClassNameW(k, cls, 32);
+        if (_wcsicmp(cls, WC_TABCONTROLW) == 0) return k;
+    }
+    return nullptr;
+}
+
+// Chooses tab `t`, as a click does (the page hears TCN_SELCHANGE); its caption.
+std::wstring choosePageTab(HWND form, HWND tabs, int t)
+{
+    TabCtrl_SetCurSel(tabs, t);
+    NMHDR nm{tabs, static_cast<UINT_PTR>(GetDlgCtrlID(tabs)), static_cast<UINT>(TCN_SELCHANGE)};
+    SendMessageW(form, WM_NOTIFY, nm.idFrom, reinterpret_cast<LPARAM>(&nm));
+    wchar_t caption[64] = {};
+    TCITEMW it{};
+    it.mask = TCIF_TEXT;
+    it.pszText = caption;
+    it.cchTextMax = 64;
+    TabCtrl_GetItem(tabs, t, &it);
+    return caption;
+}
+
 HWND openPage(fx::PageHost& host, WORD c)
 {
     if (c == CM_HOME) return OpenHomePage(host);
@@ -699,25 +725,10 @@ int RunAccessCheck(HINSTANCE inst, bool quiet)
             int dlgId = 0;
             (void)dlgId;
             // A page with tabs (spec #9 S9-M0) hides the other tabs' controls: check each tab chosen.
-            HWND tabs = nullptr;
-            for (HWND k = GetWindow(page->form(), GW_CHILD); k && !tabs; k = GetWindow(k, GW_HWNDNEXT)) {
-                wchar_t cls[32] = {};
-                GetClassNameW(k, cls, 32);
-                if (_wcsicmp(cls, WC_TABCONTROLW) == 0) tabs = k;
-            }
+            HWND tabs = pageTabs(page->form());
             const int count = tabs ? TabCtrl_GetItemCount(tabs) : 0;
-            for (int t = 0; t < count; ++t) {
-                TabCtrl_SetCurSel(tabs, t);
-                NMHDR nm{tabs, static_cast<UINT_PTR>(GetDlgCtrlID(tabs)), static_cast<UINT>(TCN_SELCHANGE)};
-                SendMessageW(page->form(), WM_NOTIFY, nm.idFrom, reinterpret_cast<LPARAM>(&nm));
-                wchar_t caption[64] = {};
-                TCITEMW it{};
-                it.mask = TCIF_TEXT;
-                it.pszText = caption;
-                it.cchTextMax = 64;
-                TabCtrl_GetItem(tabs, t, &it);
-                checkAccess(page->form(), c, what + L", tab " + caption, r);
-            }
+            for (int t = 0; t < count; ++t)
+                checkAccess(page->form(), c, what + L", tab " + choosePageTab(page->form(), tabs, t), r);
             if (count == 0) checkAccess(page->form(), c, what, r);
             w.ClosePage(h);
         }
@@ -767,6 +778,16 @@ int SaveScreenshots(HINSTANCE inst, HWND frame, const std::wstring& dir, bool qu
             }
             RedrawWindow(frame, nullptr, nullptr, RDW_INVALIDATE | RDW_UPDATENOW | RDW_ALLCHILDREN);
             r.check(SaveWindowPng(frame, file(fx::Format(L"page-%u", c))), fx::Format(L"page of command %u", c));
+            // Each further tab of a page with tabs (spec #9 S9-M2): page-<command>-tab<n>.
+            auto* page = dynamic_cast<fx::Page*>(fx::Window::FromHandle(h));
+            if (HWND tabs = page && page->form() ? pageTabs(page->form()) : nullptr) {
+                for (int t = 1; t < TabCtrl_GetItemCount(tabs); ++t) {
+                    choosePageTab(page->form(), tabs, t);
+                    RedrawWindow(frame, nullptr, nullptr, RDW_INVALIDATE | RDW_UPDATENOW | RDW_ALLCHILDREN);
+                    r.check(SaveWindowPng(frame, file(fx::Format(L"page-%u-tab%d", c, t + 1))),
+                            fx::Format(L"page of command %u, tab %d", c, t + 1));
+                }
+            }
             w->ClosePage(h);
         }
     }

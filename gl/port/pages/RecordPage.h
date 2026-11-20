@@ -53,6 +53,7 @@ struct PageDesc {
     UINT form;
     const wchar_t* title;
     bool commands;     // the Users page: the level's commands beside the user
+    bool nolist;       // one record (Company Profile, spec #9 S9-M2): no filter, list, New or Delete
     std::vector<ColumnDesc> columns;
     std::vector<FieldDesc> fields;
     std::vector<std::pair<int, unsigned>> anchors;

@@ -28,6 +28,13 @@
 //   - Budget Data (spec #9 S9-M1, D1) is the Chart of Accounts page's Budget
 //     tab (RecordModels.cpp, AccountsModel); 10074 opens the page on it
 //     (ShowRecordTab).
+//   - Company Profile (spec #9 S9-M2, D3) is a page with no list (`nolist`):
+//     the one record, "company", is shown from the start, and only Save is
+//     on it. Its tabs are pages/CompanyModel.h's. A grid's account column (a
+//     Lookup cell) lists the chart as the account fields do; picking one fills
+//     the row's dept. "Reset depreciation flag..." asks 6025 and blanks
+//     gl_fa.mode. A save tells the frame (data_group::kCompany), which shows
+//     the company and period again, as 6015's dialog did with RefreshStatus.
 //
 #include "RecordPage.h"
 
@@ -35,7 +42,9 @@
 #include "../DataChanged.h"
 #include "../FixedAssetDisposal.h"
 #include "../Globals.h"
+#include "../Ini.h"
 #include "../PortIds.h"
+#include "CompanyModel.h"
 #include "RecordModels.h"
 #include "TaskModels.h"   // data_group
 
@@ -62,7 +71,26 @@ struct PageEntry {
     std::function<std::unique_ptr<RecordModel>()> make;
     WORD classic;
     const wchar_t* classicText;
+    unsigned groups = data_group::kMasters;   // what a save or delete changes (spec #8 9.3)
 };
+
+// Company Profile's model, with GL.INI's withholding setting (1021's
+// GetWithHolding / SetWithHolding: [WITHHOLDING], string 8150) and the
+// company database's path.
+std::unique_ptr<RecordModel> makeCompanyModel()
+{
+    auto m = std::make_unique<CompanyModel>(cb);
+    m->dataPath = fx::WideToUtf8(CurDir);
+    m->readWithholding = [] {
+        const std::wstring section = fx::LoadResString(hInst, 8150);
+        return GetIniString(L"GL.INI", section.c_str(), L"TAX", L"T") == L"T" ? std::string("T") : std::string("F");
+    };
+    m->writeWithholding = [](const std::string& v) {
+        const std::wstring section = fx::LoadResString(hInst, 8150);
+        WriteIniString(L"GL.INI", section.c_str(), L"TAX", v == "T" ? L"T" : L"F");
+    };
+    return m;
+}
 
 const std::vector<PageEntry>& entries()
 {
@@ -79,6 +107,8 @@ const std::vector<PageEntry>& entries()
         {6000, &k_assets, [] { return MakeAssetsModel(cb); }, CM_ASSETS_CLASSIC, L"Add/Modify (classic)"},
         {6036, &k_assetTypes, [] { return MakeAssetTypesModel(cb); }, CM_ASSETTYPES_CLASSIC, L"Asset Types (classic)"},
         {4078, &k_users, [] { return std::make_unique<UsersModel>(cb); }, CM_USERS_CLASSIC, L"User Access (classic)"},
+        {6015, &k_company, makeCompanyModel, CM_PROFILE_CLASSIC, L"Company Profile (classic)",
+         data_group::kMasters | data_group::kCompany},   // spec #9 S9-M2
     };
     return all;
 }
@@ -143,7 +173,8 @@ m::Check decimalCheck()
 
 class RecordPage : public fx::Page {
 public:
-    RecordPage(const PageEntry& e) : fx::Page(e.desc->form), d_(*e.desc), command_(e.command), model_(e.make())
+    RecordPage(const PageEntry& e)
+        : fx::Page(e.desc->form), d_(*e.desc), command_(e.command), groups_(e.groups), model_(e.make())
     {
         commandId = e.command;   // so the tab can be pinned
     }
@@ -171,6 +202,7 @@ public:
     int shownCount() const { return static_cast<int>(shown_.size()); }
     // /stress: choose a tab; type into the current cell of its grid, then Tab.
     void ChooseTab(int tab) { ShowTab(tab); }
+    int tabCount() const { return static_cast<int>(d_.tabs.size()); }
     bool ChooseTab(const std::wstring& caption)
     {
         for (size_t i = 0; i < d_.tabs.size(); ++i)
@@ -214,6 +246,7 @@ private:
     void Delete();
     void OnButton(int id);
     fx::Lookup* lookupOf(int id);
+    void ResetDepreciation();
     UsersModel* users() { return d_.commands ? static_cast<UsersModel*>(model_.get()) : nullptr; }
     void ShowTab(int tab);
     int TabOf(int id) const;   // -1: not on a tab
@@ -221,6 +254,7 @@ private:
 
     const PageDesc& d_;
     WORD command_;
+    unsigned groups_;
     std::unique_ptr<RecordModel> model_;
     m::LookupModel accounts_;
     std::map<int, std::unique_ptr<fx::Lookup>> lookups_;            // account edit -> its lookup
@@ -228,6 +262,7 @@ private:
     std::vector<size_t> shown_;                                      // list row -> model row
     HWND list_ = nullptr, commands_ = nullptr, tabs_ = nullptr;
     std::map<int, std::unique_ptr<fx::EntryGrid>> grids_;           // a tab's grid ListView -> its grid
+    bool gridLookups_ = false;                                       // a grid has an account column
     bool selecting_ = false;
 };
 
@@ -254,7 +289,7 @@ bool RecordPage::OnInitPage()
 {
     SetAnchors(d_.anchors);
     list_ = Item(kPageList);
-    fx::SetAccessibleName(list_, std::wstring(d_.title) + L" list");   // spec #8 12
+    if (list_) fx::SetAccessibleName(list_, std::wstring(d_.title) + L" list");   // spec #8 12
     const int dpi = static_cast<int>(GetDpiForWindow(form()));
     SetWindowTheme(list_, L"Explorer", nullptr);
     ListView_SetExtendedListViewStyle(list_, LVS_EX_FULLROWSELECT | LVS_EX_DOUBLEBUFFER);
@@ -338,6 +373,16 @@ bool RecordPage::OnInitPage()
             if (!g) continue;
             auto grid = std::make_unique<fx::EntryGrid>();
             grid->Attach(Item(d_.tabs[i].grid), g);
+            // An account cell (a Lookup column) lists the chart; picking one fills the row's dept.
+            const int deptCol = g->ColumnOf("dept");
+            for (int c = 0; c < static_cast<int>(g->columns().size()); ++c)
+                if (g->columns()[static_cast<size_t>(c)].kind == m::CellKind::Lookup) {
+                    grid->SetLookup(c, &accounts_);
+                    gridLookups_ = true;
+                }
+            grid->OnPick = [g, deptCol](int row, int, const m::LookupItem& item) {
+                if (deptCol >= 0) g->SetCell(row, deptCol, item.sub);
+            };
             fx::SetAccessibleName(Item(d_.tabs[i].grid), std::wstring(d_.tabs[i].caption) + L" grid");
             fx::EntryGrid* gp = grid.get();
             g->OnChanged = [this, gp] {
@@ -353,8 +398,10 @@ bool RecordPage::OnInitPage()
         }
         ShowTab(0);
     }
+    if (gridLookups_ && !anyAccount) LoadAccounts();
     model_->Load();
     model_->New();
+    if (d_.nolist && !model_->rows().empty()) model_->Select(model_->rows().front().key);   // the one record
     ShowList();
     Fill();
     return true;
@@ -446,7 +493,7 @@ void RecordPage::Fill()
     for (const ButtonDesc& b : d_.buttons) EnableWindow(Item(b.id), !model_->isNew());
     ClearMarks();
     SetDirty(false);
-    SetPageTitle(model_->isNew() ? std::wstring(d_.title) : std::wstring(d_.title) + L" - " + wide(model_->key()));
+    SetPageTitle(model_->isNew() || d_.nolist ? std::wstring(d_.title) : std::wstring(d_.title) + L" - " + wide(model_->key()));
 }
 
 void RecordPage::FillCommands()
@@ -569,7 +616,7 @@ bool RecordPage::Save()
     Fill();
     ShowList();
     ShowInfo(fx::InfoKind::Success, wide(r.message));
-    NotifyDataChanged(data_group::kMasters, hwnd());   // spec #8 9.3
+    NotifyDataChanged(groups_, hwnd());   // spec #8 9.3
     return true;
 }
 
@@ -640,6 +687,7 @@ void RecordPage::SelectRow(int row)
 
 void RecordPage::OnNew()
 {
+    if (d_.nolist) return;   // one record: nothing to start
     if (!SwitchAllowed()) return;
     HideInfo();
     model_->New();
@@ -667,8 +715,28 @@ void RecordPage::Delete()
     NotifyDataChanged(data_group::kMasters, hwnd());
 }
 
+// 1028's "Reset the depreciation journal flag" (Company Profile, spec #9 S9-M2).
+void RecordPage::ResetDepreciation()
+{
+    auto* company = dynamic_cast<CompanyModel*>(model_.get());
+    if (!company || SaveWaitsForJob(*this)) return;
+    enum { kReset = 101 };
+    const std::wstring question = fx::LoadResString(hInst, 6025);   // "Reset the depreciation journal flag."
+    if (fx::Ask(host() ? host()->hostWindow() : hwnd(), szApp, L"Reset the depreciation journal flag?",
+                question.empty() ? std::wstring(L"Every fixed asset's depreciation mark is cleared.") : question,
+                {{kReset, L"Reset the flag"}, {IDCANCEL, L"Keep it"}}, IDCANCEL, IDCANCEL) != kReset)
+        return;
+    const int n = company->ResetDepreciationFlag();
+    ShowInfo(fx::InfoKind::Success, fx::Format(L"The depreciation journal flag is reset on %d fixed asset(s).", n));
+    NotifyDataChanged(data_group::kAssets, hwnd());
+}
+
 void RecordPage::OnButton(int id)
 {
+    if (command_ == 6015 && !d_.buttons.empty() && id == d_.buttons.front().id) {
+        ResetDepreciation();
+        return;
+    }
     if (command_ == 6000 && id == d_.buttons.front().id && !model_->isNew()) {   // Fixed Assets: Dispose...
         if (!SwitchAllowed()) return;
         const std::string key = model_->key();
@@ -781,12 +849,13 @@ bool RecordPage::OnFormNotify(NMHDR* nm, LRESULT& result)
 bool RecordPage::OnMessage(UINT msg, WPARAM wp, LPARAM lp, LRESULT& result)
 {
     if (msg == kDataChanged) {   // spec #8 9.3: another page or a job changed the masters
-        if ((wp & data_group::kMasters) && reinterpret_cast<HWND>(lp) != hwnd()) {
+        if ((wp & groups_) && reinterpret_cast<HWND>(lp) != hwnd()) {
             if (!IsDirty()) {
                 const std::string key = model_->key();
                 const bool wasNew = model_->isNew();
                 model_->Load();
                 if (!wasNew && !model_->Select(key)) model_->New();
+                if (d_.nolist && model_->isNew() && !model_->rows().empty()) model_->Select(model_->rows().front().key);
                 Fill();
                 ShowList();
             } else {
@@ -965,7 +1034,7 @@ int StressRecordPages(int times)
             p->SelectShown(0);
             p->Filter("");
             p->SelectShown(1);
-            p->ChooseTab(L"Budget");   // the Chart of Accounts page's Budget tab (spec #9 S9-M1); others have none
+            for (int t = 0; t < p->tabCount(); ++t) p->ChooseTab(t);   // the Budget tab (S9-M1), Company Profile's (S9-M2)
             p->SelectShown(0);
             p->ChooseTab(0);
             w.ClosePage(h);

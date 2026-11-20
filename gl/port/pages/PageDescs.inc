@@ -2,7 +2,7 @@
 // The list-and-detail pages' descriptors (RecordPage.h), included once by RecordPages.cpp.
 
 const PageDesc k_departments{
-    IDD_PG_DEPARTMENTS, L"Departments", false,
+    IDD_PG_DEPARTMENTS, L"Departments", false, false,
     {{L"Dept", 48, false}, {L"Description", 170, false}},
     {
         {21010, "depart", FieldKind::Upper, 4, FieldFlag::Key, 0, 0},
@@ -18,7 +18,7 @@ const PageDesc k_departments{
 };
 
 const PageDesc k_medicalReps{
-    IDD_PG_MEDREPS, L"Medical Reps", false,
+    IDD_PG_MEDREPS, L"Medical Reps", false, false,
     {{L"Code", 48, false}, {L"Name", 170, false}},
     {
         {21010, "code", FieldKind::Upper, 5, FieldFlag::Key, 0, 0},
@@ -48,7 +48,7 @@ const PageDesc k_medicalReps{
 };
 
 const PageDesc k_doctors{
-    IDD_PG_DOCTORS, L"Doctors", false,
+    IDD_PG_DOCTORS, L"Doctors", false, false,
     {{L"Code", 48, false}, {L"Name", 170, false}},
     {
         {21010, "code", FieldKind::Upper, 5, FieldFlag::Key, 0, 0},
@@ -78,7 +78,7 @@ const PageDesc k_doctors{
 };
 
 const PageDesc k_products{
-    IDD_PG_PRODUCTS, L"Products", false,
+    IDD_PG_PRODUCTS, L"Products", false, false,
     {{L"Code", 56, false}, {L"Name", 160, false}},
     {
         {21010, "code", FieldKind::Upper, 7, FieldFlag::Key, 0, 0},
@@ -100,7 +100,7 @@ const PageDesc k_products{
 };
 
 const PageDesc k_vendors{
-    IDD_PG_VENDORS, L"Vendors", false,
+    IDD_PG_VENDORS, L"Vendors", false, false,
     {{L"Vendor", 56, false}, {L"Name", 160, false}},
     {
         {21010, "number", FieldKind::Upper, 6, FieldFlag::Key, 0, 0},
@@ -140,7 +140,7 @@ const PageDesc k_vendors{
 };
 
 const PageDesc k_accounts{
-    IDD_PG_ACCOUNTS, L"Chart of Accounts", false,
+    IDD_PG_ACCOUNTS, L"Chart of Accounts", false, false,
     {{L"Account", 52, false}, {L"Dept", 32, false}, {L"Description", 150, false}},
     {
         {21010, "account", FieldKind::Upper, 7, FieldFlag::Key, 0, 0},
@@ -163,7 +163,7 @@ const PageDesc k_accounts{
 };
 
 const PageDesc k_assetTypes{
-    IDD_PG_ASSETTYPES, L"Asset Types", false,
+    IDD_PG_ASSETTYPES, L"Asset Types", false, false,
     {{L"Type", 40, false}, {L"Description", 170, false}},
     {
         {21010, "code", FieldKind::Upper, 4, FieldFlag::Key, 0, 0},
@@ -184,7 +184,7 @@ const PageDesc k_assetTypes{
 };
 
 const PageDesc k_assets{
-    IDD_PG_ASSETS, L"Fixed Assets", false,
+    IDD_PG_ASSETS, L"Fixed Assets", false, false,
     {{L"Asset", 56, false}, {L"Description", 150, false}},
     {
         {21010, "code", FieldKind::Upper, 10, FieldFlag::Key, 0, 0},
@@ -215,8 +215,39 @@ const PageDesc k_assets{
     {},
 };
 
+const PageDesc k_company{
+    IDD_PG_COMPANY, L"Company Profile", false, true,
+    {{L"Company", 170, false}},
+    {
+        {21010, "company", FieldKind::Text, 40, FieldFlag::None, 0, 0},
+        {21011, "address1", FieldKind::Text, 50, FieldFlag::None, 0, 0},
+        {21012, "address2", FieldKind::Text, 50, FieldFlag::None, 0, 0},
+        {21013, "address3", FieldKind::Text, 50, FieldFlag::None, 0, 0},
+        {21014, "postal", FieldKind::Text, 9, FieldFlag::None, 0, 0},
+        {21015, "phone", FieldKind::Text, 16, FieldFlag::None, 0, 0},
+        {21016, "fax", FieldKind::Text, 16, FieldFlag::None, 0, 0},
+        {21017, "contact", FieldKind::Text, 20, FieldFlag::None, 0, 0},
+        {21018, "firstDay", FieldKind::ReadOnly, 10, FieldFlag::None, 0, 0},
+        {21019, "lastDay", FieldKind::ReadOnly, 10, FieldFlag::None, 0, 0},
+        {21020, "dataPath", FieldKind::ReadOnly, 60, FieldFlag::None, 0, 0},
+        {21021, "withholding", FieldKind::Choice, 1, FieldFlag::None, 0, 0},
+    },
+    {
+        {IDC_PG_SAVE, m::kTopLeft}, {21003, m::kTopLeft}, {21004, m::kTopWide}, {21100, m::kTopLeft},
+        {21400, m::kTopLeft}, {21010, m::kTopLeft}, {21401, m::kTopLeft}, {21011, m::kTopLeft},
+        {21402, m::kTopLeft}, {21012, m::kTopLeft}, {21403, m::kTopLeft}, {21013, m::kTopLeft},
+        {21404, m::kTopLeft}, {21014, m::kTopLeft}, {21405, m::kTopLeft}, {21015, m::kTopLeft},
+        {21406, m::kTopLeft}, {21016, m::kTopLeft}, {21407, m::kTopLeft}, {21017, m::kTopLeft},
+        {21101, m::kTopLeft}, {21408, m::kTopLeft}, {21018, m::kTopLeft}, {21409, m::kTopLeft},
+        {21019, m::kTopLeft}, {21410, m::kTopLeft}, {21020, m::kTopLeft}, {21411, m::kTopLeft},
+        {21021, m::kTopLeft}, {21005, m::kAll}, {21006, m::kAll}, {21007, m::kAll},
+    },
+    {{21003, L"&Reset depreciation flag..."}},
+    {{L"Company", 0, "", {21100, 21400, 21010, 21401, 21011, 21402, 21012, 21403, 21013, 21404, 21014, 21405, 21015, 21406, 21016, 21407, 21017, 21101, 21408, 21018, 21409, 21019, 21410, 21020, 21411, 21021}}, {L"Periods", 21005, "periods", {21005}}, {L"Accounts", 21006, "accounts", {21006}}, {L"Banks", 21007, "banks", {21007}}},
+};
+
 const PageDesc k_tabCheck{
-    IDD_PG_TABCHECK, L"Tab check", false,
+    IDD_PG_TABCHECK, L"Tab check", false, false,
     {{L"Code", 48, false}, {L"Name", 170, false}},
     {
         {21010, "code", FieldKind::Upper, 4, FieldFlag::Key, 0, 0},
@@ -238,7 +269,7 @@ const PageDesc k_tabCheck{
 };
 
 const PageDesc k_users{
-    IDD_PG_USERS, L"Users", true,
+    IDD_PG_USERS, L"Users", true, false,
     {{L"User", 56, false}, {L"Description", 150, false}},
     {
         {21010, "username", FieldKind::Upper, 10, FieldFlag::Key, 0, 0},

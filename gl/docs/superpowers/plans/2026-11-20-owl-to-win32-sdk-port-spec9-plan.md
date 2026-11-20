@@ -3,7 +3,7 @@
 **Spec reference:** `gl/docs/superpowers/specs/2026-11-19-owl-to-win32-sdk-port-spec8-design.md`, §5.1 (list and detail) and §5.3 (task pages). This plan adds no design of its own beyond the decisions in [Decisions](#decisions) below.
 **Gap:** G3 of `gl/docs/superpowers/specs/2026-11-19-spec8-acceptance.md` ("Budget Data, Company Profile's accounts and banks, Print Cheques, Confirm Printed Cheques, Restore and Bank Reconciliation are still dialogs." Deferred: a later spec).
 **Date:** 2026-11-20
-**Plan status:** Reviewed; Q1–Q4 answered (2026-11-20). S9-M0 and S9-M1 built.
+**Plan status:** Reviewed; Q1–Q4 answered (2026-11-20). S9-M0 to S9-M2 built.
 
 **Paths:** relative to the repository root. The screens today:
 
@@ -42,8 +42,8 @@ This plan finishes the Spec #8 design for the screens it didn't move. If a miles
 |---|---|---|
 | D1 | **Budget Data is a tab of the account** on the Chart of Accounts page (Spec #8 plan M2 task 2): Period, Budget (edited), Current year and Previous year, 12 rows. Saving the account's page saves its budget, through `SaveBudget`. The 10074 command opens the Chart of Accounts page on that tab. | One account, one page; the budget is the account's. |
 | D2 | **`EntryGridModel` gains a fixed-rows mode:** no blank row at the end, no Insert or Ctrl+Delete, every row's read-only columns kept. Budget Data, the periods and the eight accounts use it. | The three grids have a fixed number of rows. The model is shared, so the change is tested once. |
-| D3 | **Company Profile is one page with four tabs:** Company (GL_PROF, the fiscal year shown, the data path, the `[WITHHOLDING] TAX` setting), Periods (GL_PDS, 12 rows: start, end, description, closed), Accounts (the eight GL_SETAT GL rows, each an account lookup) and Banks (a list and detail over GL_SETAT TYPE="CA"). **Save** writes the tabs that changed, each through the code its dialog uses. No `closeAll` (Spec #8 D7). | §5.1 named the accounts and banks; the company and periods share the screen today, and splitting them would scatter one screen over four commands. |
-| D4 | **The rules don't change:** Periods saves without checks, as 1028 does; Accounts refuses an account that isn't in the chart (8121); Banks asks nothing on a change (Spec #8 D9) and asks before Delete; "Reset the depreciation journal flag" is a command on the Periods tab, asking as 6025 does. | Spec #8 principle 1. Any new period check is Q1. |
+| D3 | **Company Profile is one page with four tabs:** Company (GL_PROF, the fiscal year shown, the data path, the `[WITHHOLDING] TAX` setting), Periods (GL_PDS, 12 rows: start, end, description, closed), Accounts (the eight GL_SETAT GL rows, each an account lookup) and Banks (a grid of GL_SETAT TYPE="CA": account, dept and name; *changed in S9-M2* from "a list and detail", see its note). **Save** writes the tabs that changed, each through the code its dialog uses. No `closeAll` (Spec #8 D7). | §5.1 named the accounts and banks; the company and periods share the screen today, and splitting them would scatter one screen over four commands. |
+| D4 | **The rules don't change:** Periods saves without checks, as 1028 does; Accounts refuses an account that isn't in the chart (8121); Banks asks nothing on a change (Spec #8 D9), and a row is removed with Ctrl+Delete and Save, as a voucher line is (*changed in S9-M2*: no 6024 question); "Reset the depreciation journal flag" is a command on the Periods tab, asking as 6025 does. | Spec #8 principle 1. Any new period check is Q1. |
 | D5 | **The cheque cycle is one task page,** "Cheques", with three steps in a row: **Print** (opens 4091's preview tab, as today), **Confirm printed** (Confirm Printed Cheques: the made cheques listed, the first and last that printed, one action through `ConfirmPrinted`), and **Renumber** (a row's command, through `RenumberCheque`). 4091 and 8074 both open it; 4091 keeps opening the preview too (Q3). | Print and Confirm are one job for the user, done one after the other. Print stays the report it is. |
 | D6 | **Bank Reconciliation is a task page:** the cheques not cleared, with check boxes, a date, and **Clear**, which calls `ClearCheque` once per checked cheque with that date (each its own transaction, as Spec #8 M4's Post does). **Void** is a row's command, asking as today, through `VoidCheque`. Refusals (not confirmed printed; a closed period) go on the row. | Clearing a statement's worth of cheques one dialog at a time is the slowest part of today's screen; the core is called the same way, once per cheque. |
 | D7 | **Restore is a task page,** beside Backup: the file (a Browse button and the file's checks from `CheckRestoreFile`, shown before the action), the consequence in plain words, and **Restore from <file>**. It runs on the UI thread, not as a job, because it closes `cb`. Before it runs, every other page is closed: pages with unsaved changes are listed and asked about once, as closing the program does; Home and the Restore page stay. After it, the workspace broadcasts every data group changed and reapplies rights, as the frame does today. | Restore replaces the database under everything; closing the other pages first is the only safe order. |
@@ -167,6 +167,45 @@ S is less than a day, M is 1–3 days. **Parallel work:** M3 and M4 need only Sp
 ---
 
 ## Milestone 2 — Company Profile's page
+
+> **As built (2026-11-20; built and run on Windows 11, VS 18, v145).**
+> - **A page with no list** (`make_pages.py` `nolist`, `PageDesc::nolist`): no filter, no list, no New or Delete; its groups and tabs start at the left edge. The page shows its one record ("company") from the start, New does nothing, and its title is the page's name.
+> - **The page** (`IDD_PG_COMPANY` 20030, task 1): Save and **Reset depreciation flag...** along the top, then four tabs.
+>   - **Company:** GL_PROF's eight fields. Beside them, read-only: the year's first and last days (MM/DD/YYYY, from GL_PDS) and the company database. **W/H tax** is a Yes/No choice over GL.INI `[WITHHOLDING] TAX` (string 8150), where 1021 had a check box.
+>   - **Periods:** a fixed 12-row grid of start and end (MM/DD/YYYY; "4/1/2026", "04/01/26" and "20260401" are taken too), description and closed ("Y" or blank).
+>   - **Accounts:** a fixed 8-row grid in the `gl_accts` tag's order (by SHORT: AP, AR, RE, SALE, ...), with the row's name (read-only), account and dept.
+>   - **Banks:** a grid of the banks in the `cash` tag's order (account, dept, name).
+> - **Deviation, Banks** (D3 and D4 corrected above): a grid, not a list and detail. Rows are changed in place, added in the blank row and removed with Ctrl+Delete (undone with Ctrl+Z), and Save writes them all, as a voucher's lines are. So 6022 ("Already added ... modify?") and 6024 (delete) aren't asked. A list with its own New, Save and Delete inside a tab would have been a second Save on one page.
+> - **Lookups in grids:** an account cell lists the chart, as account fields do; picking one fills the row's dept (`RecordPage`, any grid with a Lookup column).
+> - **The model** (task 2, `pages/CompanyModel.{h,cpp}`, portable):
+>   - **Reading:** the profile, the periods, the eight accounts and the banks. The withholding setting and the database path come through callbacks the page sets, so tests don't touch GL.INI.
+>   - **Saving:** only the tabs that changed are written, each as its dialog wrote it, in one `cb4sqlite::Transaction` (the dialogs flushed record by record). GL.INI is written after the commit.
+>   - **The checks before anything is written:**
+>     - a period date that isn't one;
+>     - an account (Accounts tab) or bank not in the chart, with 8121's words and the tab and row;
+>     - a bank listed twice, which a grid can hold and the dialog couldn't.
+>   - **Banks are saved row by row:** a removed bank is `deleteRec`ed, then the table is packed. A changed name is flushed. A new bank is appended from a **blank** buffer: 1034's `appendStart` kept the buffer it was on, so a new bank could take another row's SHORT. The `cash` tag's seek is a prefix match, so the row found is checked to be that account and dept.
+>   - **No `closeAll`** (spec #8 D7): 1021's OK ran `cb.closeAll(); cb.init()`.
+>   - **Reset depreciation flag** (`ResetDepreciationFlag`, 1028's ID_FA): it asks 6025 in a task dialog, then blanks `gl_fa.mode` on every row and says how many.
+> - **After a save** (task 3): the page tells everyone `data_group::kMasters | kCompany` (new bit, 128). The frame refreshes its status bar (the company and the period) on `kCompany`, as 6015 did with `RefreshStatus`.
+> - **The commands** (task 4):
+>   - 6015 opens the page.
+>   - "Company Profile (classic)" (`CM_PROFILE_CLASSIC` 20546) opens 1021. It sits under File in the navigation pane and follows 6015's right.
+>   - Save waits for a writing job, as every page's does (D8).
+> - **Tests** (task 5, `gl_tests/test_company.cpp`, 8 cases; `gl_tests` 231):
+>   - **Each tab read as the dialogs showed it.**
+>   - **Each tab saved alone:** SQL checks every field its dialog wrote, and checks the other tables are unchanged byte for byte.
+>   - **Periods:** saved out of order, as 1028 allowed (Q1), and a bad date refused with nothing written.
+>   - **Accounts:** 8121 refused with nothing written.
+>   - **Banks:** a bank added (a blank SHORT, type CA), renamed and removed (packed), and a bank not in the chart and a duplicate refused.
+>   - **The rest:** the depreciation flag reset (4 rows); the date conversions; and an open `glaccts` cursor still usable after a save (no `closeAll`).
+>
+>   **Deviation** (plan P1): the classic code is in the dialogs' window code and can't run in `gl_tests`, so the tests check the dialogs' writes field by field rather than running both on two copies.
+> - **`/checkaccess`:** all four tabs pass all four checks (read from the report).
+> - **`/screenshots`:** it now captures each further tab of a tabbed page (`page-<command>-tab<n>`). It shares the tab choosing with `/checkaccess` (`pageTabs`, `choosePageTab`). Checked by eye at 100 %: the four tabs, and the Chart of Accounts' Budget tab. One first capture of the Periods tab came out blank: its 12 rows were there and visible (checked through the window), and a second run drew them.
+> - **`/stress`:** each record page chooses every tab. The record pages' step takes about 10 s in Debug.
+> - **Found, not this milestone's:** a Debug `/stress` run takes about 5 minutes. Most of that is the report step (`StressReports`): its first reading is -1 after about 2 minutes, so `stressStep` runs it again. That's the OLE-lost USER object `stressStep` re-measures for; it exits 0.
+> - **Not driven in the app:** typing into the grids, Save and Reset from the page (the drive sends no keystrokes; the model's tests cover the writes).
 
 **Goal:** the company, its periods, its accounts and its banks on one page (D3, D4).
 

@@ -91,6 +91,7 @@
     <ClInclude Include="port\YearEnd.h" />
     <ClInclude Include="port\db_gl_dist.h" />
     <ClInclude Include="port\db_gl_distb.h" />
+    <ClInclude Include="port\pages\CompanyModel.h" />
     <ClInclude Include="port\pages\CustomersModel.h" />
     <ClInclude Include="port\pages\CustomersPage.h" />
     <ClInclude Include="port\pages\GlVoucherModel.h" />
@@ -169,6 +170,7 @@
     <ClCompile Include="port\VoucherPosting.cpp" />
     <ClCompile Include="port\Vouchers.cpp" />
     <ClCompile Include="port\YearEnd.cpp" />
+    <ClCompile Include="port\pages\CompanyModel.cpp" />
     <ClCompile Include="port\pages\CustomersModel.cpp" />
     <ClCompile Include="port\pages\CustomersPage.cpp" />
     <ClCompile Include="port\pages\GlVoucherModel.cpp" />
