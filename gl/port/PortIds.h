@@ -362,6 +362,7 @@
 #define CM_ASSETTYPES_CLASSIC   20515   // Asset Types (6036)
 #define CM_ASSETS_CLASSIC       20516   // Fixed Assets > Add/Modify (6000)
 #define CM_USERS_CLASSIC        20517   // User Access (4078)
+#define CM_BUDGET_CLASSIC       20545   // Budget Data (10074, dialog 1017): the Chart of Accounts page's Budget tab since spec #9 S9-M1
 // The classic dialogs of the voucher screens that became pages in S8-M3 (spec #8 Q4).
 #define CM_GLVOUCHER_CLASSIC    20518   // General Ledger Voucher (10076, 1007)
 #define CM_PRIOR_CLASSIC        20519   // Prior Period Entry (8081)

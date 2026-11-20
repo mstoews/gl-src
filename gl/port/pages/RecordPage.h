@@ -70,6 +70,8 @@ HWND OpenRecordPage(fx::PageHost& host, WORD command);
 bool IsRecordPageCommand(WORD command);
 // A record page shows the record with `key` (command search); false if it isn't one, or the record isn't on file.
 bool ShowRecord(HWND page, const std::string& key);
+// A record page shows its tab captioned `caption` ("Budget": Budget Data, spec #9 S9-M1); false if it has none.
+bool ShowRecordTab(HWND page, const std::wstring& caption);
 
 // The commands that became pages, each with its classic dialog's command
 // (spec #8 Q4: the dialogs stay until the acceptance) and its name there.

@@ -73,6 +73,7 @@ Id RightOf(Id id)
     case CM_ASSETTYPES_CLASSIC: return 6036;
     case CM_ASSETS_CLASSIC: return 6000;
     case CM_USERS_CLASSIC: return 4078;
+    case CM_BUDGET_CLASSIC: return 10074;   // spec #9 S9-M1
     // The classic dialogs of the S8-M3 voucher pages.
     case CM_GLVOUCHER_CLASSIC: return kGlVoucher;
     case CM_PRIOR_CLASSIC: return 8081;

@@ -698,7 +698,27 @@ int RunAccessCheck(HINSTANCE inst, bool quiet)
             const std::wstring what = page->title();
             int dlgId = 0;
             (void)dlgId;
-            checkAccess(page->form(), c, what, r);
+            // A page with tabs (spec #9 S9-M0) hides the other tabs' controls: check each tab chosen.
+            HWND tabs = nullptr;
+            for (HWND k = GetWindow(page->form(), GW_CHILD); k && !tabs; k = GetWindow(k, GW_HWNDNEXT)) {
+                wchar_t cls[32] = {};
+                GetClassNameW(k, cls, 32);
+                if (_wcsicmp(cls, WC_TABCONTROLW) == 0) tabs = k;
+            }
+            const int count = tabs ? TabCtrl_GetItemCount(tabs) : 0;
+            for (int t = 0; t < count; ++t) {
+                TabCtrl_SetCurSel(tabs, t);
+                NMHDR nm{tabs, static_cast<UINT_PTR>(GetDlgCtrlID(tabs)), static_cast<UINT>(TCN_SELCHANGE)};
+                SendMessageW(page->form(), WM_NOTIFY, nm.idFrom, reinterpret_cast<LPARAM>(&nm));
+                wchar_t caption[64] = {};
+                TCITEMW it{};
+                it.mask = TCIF_TEXT;
+                it.pszText = caption;
+                it.cchTextMax = 64;
+                TabCtrl_GetItem(tabs, t, &it);
+                checkAccess(page->form(), c, what + L", tab " + caption, r);
+            }
+            if (count == 0) checkAccess(page->form(), c, what, r);
             w.ClosePage(h);
         }
         DestroyWindow(w.hwnd());

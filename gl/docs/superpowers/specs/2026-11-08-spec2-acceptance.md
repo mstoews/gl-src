@@ -233,7 +233,7 @@ Record `glaccts` and `gl_dist` for 101's accounts (111101, 410001-10, 410001-20)
 
 ## Redesign (Spec #8)
 
-The figures and checks above stay as they are. Spec #8 (`2026-11-19-owl-to-win32-sdk-port-spec8-design.md`, §15 criterion 2) moved many screens into pages in the main window; this table says where each step whose screen moved is done in the redesigned program. Until Spec #8's acceptance the old dialog of each moved screen is still reachable as a "(classic)" entry in the navigation pane, so each step can be done either way. Transaction Inquiry (#9), Budget Data (#10), Company Profile and Restore are still dialogs.
+The figures and checks above stay as they are. Spec #8 (`2026-11-19-owl-to-win32-sdk-port-spec8-design.md`, §15 criterion 2) moved many screens into pages in the main window; this table says where each step whose screen moved is done in the redesigned program. Until Spec #8's acceptance the old dialog of each moved screen is still reachable as a "(classic)" entry in the navigation pane, so each step can be done either way. Transaction Inquiry (#9), Company Profile and Restore are still dialogs. Budget Data (#10) is the Chart of Accounts page's Budget tab since Spec #9 S9-M1 (`plans/2026-11-20-owl-to-win32-sdk-port-spec9-plan.md`); its dialog is "Budget Data (classic)" until Spec #9's acceptance.
 
 | Criterion and step | Where it's done now | What differs |
 |---|---|---|
@@ -262,6 +262,9 @@ The figures and checks above stay as they are. Spec #8 (`2026-11-19-owl-to-win32
 | 7. 101 opens in Voucher Entry again, and Post posts it | Voucher List page, Open; then the Post General Ledger task page | As in #3 and #5. |
 | 8. Cancel Voucher > General Ledger lists 102 | Cancel General Ledger task page | Nothing is checked to start. |
 | 8. Double-click 102 and answer Yes to 8099 | Cancel General Ledger task page: check 102, click Cancel vouchers, confirm | The confirmation is a task dialog with named buttons instead of 8099. |
+| 10. Accounts > Budget Data; pick 410001 dept 10 | Chart of Accounts page, Budget tab (Budget Data opens the page on it); select 410001 dept 10 in the list | The grid is on the account's page, not a separate screen. Period 7's Current Year shows the same figure. |
+| 10. Edit periods 1, 6 and 12; Add, Yes to 8098 | Chart of Accounts page, Budget tab: edit the three cells, then Save | Save, not Add; no 8098 question. Enter moves down the periods. A budget that didn't change isn't written. |
+| 10. Close, reopen, pick 410001 dept 10: the three amounts are there | Chart of Accounts page, Budget tab | None: the `select` and "no other account's budget changed" checks are the same. |
 | 11. Set 101000's type to Retained earnings, then back to Balance Sheet | Chart of Accounts page: select 101000, change the type, Save | Save, not Add/Mod. |
 | 11. Year End Consolidation, Yes to 8111; refused, then run again | Year end task page: Close the year, then confirm | The confirmation is a task dialog instead of 8111. The list shows both type-R accounts with a note; the refusal says the chart needs exactly one retained earnings account and how many it has, without naming them. The result line reports the amount to retained earnings, not 340000's new balance. |
 | 12. Backup Databases suggests `dev-<today>.db`; save it | Backup task page: Back up, then confirm | No Save As dialog: the page shows the copy's name, `dev-<today>.db` beside `dev.db`, and the result line names the file. |

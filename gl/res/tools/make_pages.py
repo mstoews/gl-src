@@ -71,8 +71,11 @@ PAGES = [
          columns=[('Account', 52, 0), ('Dept', 32, 0), ('Description', 150, 0)],
          groups=[(1, 'Account', [('account', '&Account:', 'upper', 7, 'k'), ('dept', 'D&ept:', 'upper', 4, 'K'),
                                  ('descript', 'D&escription:', 'text', 45, 'r'),
-                                 ('fdescript', '&Foreign desc.:', 'text', 45, ''), ('type', '&Type:', 'choice', 1, '')]),
-                 (1, 'Balances', [('currBal', 'Balance:', 'amount', 16, ''), ('openBal', '&Opening:', 'amount', 16, '')])]),
+                                 ('fdescript', '&Foreign desc.:', 'text', 45, ''), ('type', '&Type:', 'choice', 1, '')])],
+         # Spec #9 S9-M1 (D1): Budget Data is the account's Budget tab.
+         tabs=[dict(caption='Balances', groups=[(1, 'Balances', [('currBal', 'Balance:', 'amount', 16, ''),
+                                                               ('openBal', '&Opening:', 'amount', 16, '')])]),
+               dict(caption='Budget', grid='budget')]),
     dict(name='assetTypes', idd='IDD_PG_ASSETTYPES', title='Asset Types',
          columns=[('Type', 40, 0), ('Description', 170, 0)],
          groups=[(1, 'Asset type', [('code', '&Type:', 'upper', 4, 'k'), ('description', 'D&escription:', 'text', 30, 'r')]),

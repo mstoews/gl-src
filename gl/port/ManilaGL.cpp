@@ -382,7 +382,11 @@ bool ManilaGL::OnCommand(WORD id, WORD code, HWND ctl)
     case ID_GLTRANSINQ:                    // TGlWindow::GLTransInquiry: General Ledger Voucher Inquiry
         RunTransactionInquiry(hwnd());
         return true;
-    case ID_ACCTBUDGET:                    // TGlWindow::GLAcctBudget: Budget Data
+    case ID_ACCTBUDGET:                    // TGlWindow::GLAcctBudget: Budget Data, the account's Budget tab (spec #9 D1)
+        ShowRecordTab(OpenRecordPage(*this, ID_ACCTADD), L"Budget");
+        NoteRecentPage(ID_ACCTADD);
+        return true;
+    case CM_BUDGET_CLASSIC:                // Budget Data's dialog (1017), until spec #9's acceptance (D9)
         RunBudgetData(hwnd());
         return true;
     case CM_TK_YEAREND_CLASSIC:            // (ID_YEAREND) TGlWindow::GLYearEnd: Year End Consolidation
@@ -717,6 +721,8 @@ void ManilaGL::BuildNavigation()
     }
     // The classic dialog of a screen that became a page (spec #8 Q4): not on the menu.
     if (accounts) classic(accounts, L"Sales Customers (classic)", CM_AR_CUSTOMERS_CLASSIC);
+    const auto budget = parentOf.find(static_cast<WORD>(ID_ACCTBUDGET));   // spec #9 S9-M1
+    if (budget != parentOf.end()) classic(budget->second, L"Budget Data (classic)", CM_BUDGET_CLASSIC);
     const auto rp = parentOf.find(static_cast<WORD>(CM_REPORT_LIST));
     if (rp != parentOf.end()) classic(rp->second, L"Custom Report (classic)", CM_REPORT_LIST_CLASSIC);
 }
