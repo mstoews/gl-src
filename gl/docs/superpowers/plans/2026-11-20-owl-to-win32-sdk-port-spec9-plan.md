@@ -3,7 +3,7 @@
 **Spec reference:** `gl/docs/superpowers/specs/2026-11-19-owl-to-win32-sdk-port-spec8-design.md`, §5.1 (list and detail) and §5.3 (task pages). This plan adds no design of its own beyond the decisions in [Decisions](#decisions) below.
 **Gap:** G3 of `gl/docs/superpowers/specs/2026-11-19-spec8-acceptance.md` ("Budget Data, Company Profile's accounts and banks, Print Cheques, Confirm Printed Cheques, Restore and Bank Reconciliation are still dialogs." Deferred: a later spec).
 **Date:** 2026-11-20
-**Plan status:** Reviewed; Q1–Q4 answered (2026-11-20). Nothing built.
+**Plan status:** Reviewed; Q1–Q4 answered (2026-11-20). S9-M0 built.
 
 **Paths:** relative to the repository root. The screens today:
 
@@ -79,6 +79,32 @@ S is less than a day, M is 1–3 days. **Parallel work:** M3 and M4 need only Sp
 ---
 
 ## Milestone 0 — Fixed-row grids and tabs on a record page
+
+> **As built (2026-11-20; built and run on Windows 11, VS 18, v145).**
+> - **Fixed rows** (task 2, D2): `EntryGridModel::SetFixedRows(n)`:
+>   - **The rows:** exactly `n`, with no blank row; `Clear` gives `n` blank rows, and `SetRows` pads or cuts to `n`.
+>   - **The keys:** Insert, Ctrl+Delete and Ctrl+Z do nothing; Tab or Enter on the last row's last cell stays there.
+>   - **Back to normal:** `SetFixedRows(0)` is the usual grid again.
+>   - **The view:** `fx::EntryGrid` is unchanged, since it passes every key to the model.
+> - **Tabs** (task 3; `make_pages.py`, `RecordPage.h` `TabDesc`, `RecordPages.cpp`):
+>   - **Where they go:** a page's `tabs` sit below its groups, across both columns.
+>   - **The strip** (21004) is a Tab control that is its row of tabs only, with no body. The tabs' controls are siblings below it, so nothing overlaps and nothing needs `WS_CLIPSIBLINGS` or a themed tab body.
+>   - **A tab** holds its own groups, or one grid (21005-21009, an `fx::EntryGrid` over the model's `Grid(key)`).
+>   - **Labels on a tab** get IDs (21400 on), so the page can hide them; the page's own labels stay -1.
+>   - **On the page:** choosing a tab shows its controls and hides the others'. Save first commits a grid's edit. A field refused on a hidden tab, or a grid cell refused, brings its tab forward. A grid edit marks the page dirty.
+> - **Grids in models:** `RecordModel::Grid(key)` (null by default) and `LoadGrids(key)`.
+>   - **When `LoadGrids` runs:** from `New` and `Select` only, not from `Read`. `Save` calls `Read` to see whether a new record's key is taken, so loading grids in `Read` would have wiped what was typed before the write.
+> - **The tab check page** (`IDD_PG_TABCHECK` 20029, `k_tabCheck`; task 4):
+>   - **What it is:** a record kept in memory, with a Details tab (a note, an amount, an account lookup) and a Budget tab (Budget Data's 12-row grid). No command opens it.
+>   - **Deviation:** the plan named "/stress's entry-grid test page", but there's no such page (the voucher pages are what `/stress` types into). The tab check page takes its place.
+>   - **What `/checkres` checks:** its form loads, its captions fit, and every control on every tab has an anchor.
+>   - **What `/stress` does:** it opens the page 25 times, chooses each tab, types a budget into the grid, saves, and moves to the other record.
+> - **Tests** (task 2 and the grids; `gl_tests` 222, 2 new):
+>   - **`test_grid.cpp`:** every key on a fixed grid; `SetRows` padding and cutting; totals; back to normal.
+>   - **`test_pages.cpp`:** a model's grid loaded on New and Select, and kept through Save's key check, both when the key is free and when it's taken.
+> - **The existing pages:** their forms are unchanged; their descriptors only gain an empty tab list.
+> - **Checked:** Debug and Release `/W4 /WX` clean. `gl_tests` 222, `cb4sqlite_tests` 79 and `report_tests` 19 pass in both. `/checkres`, `/checkaccess` and `/stress` (3 runs) exit 0 in both.
+> - **For M1 and M2:** `/checkaccess` opens pages from their commands, so it hasn't yet seen a tabbed page. Its Tab-reach check will meet hidden controls on M1's Chart of Accounts and M2's Company Profile, and must count only the chosen tab's.
 
 **Goal:** the two framework pieces M1 and M2 need.
 

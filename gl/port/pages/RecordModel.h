@@ -17,6 +17,7 @@
 #pragma once
 
 #include "cb4sqlite.h"
+#include "model/EntryGridModel.h"   // a tab's grid (spec #9 S9-M0)
 
 #include <cstdint>
 #include <map>
@@ -62,6 +63,9 @@ public:
     virtual void Set(const std::string& field, const std::string& value) { values_[field] = value; }
     // A choice field's items: (value, what the list shows).
     virtual std::vector<std::pair<std::string, std::string>> Choices(const std::string& /*field*/) const { return {}; }
+    // A tab's grid (spec #9 S9-M0), by the page's grid key; null if the model has none.
+    // The model fills it in LoadGrids and reads it in Write.
+    virtual fx::model::EntryGridModel* Grid(const std::string& /*key*/) { return nullptr; }
 
     // On success the record is on file, the list reloaded, and the record
     // stays selected (shown as saved).
@@ -82,6 +86,10 @@ protected:
     // Checks and writes the record. `isNew`: append, else replace `key`.
     virtual Result Write(Values& v, bool isNew) = 0;
     virtual Result Remove(const std::string& key) = 0;
+    // Fills the grids for the record `key` ("" for a new one). Called by New
+    // and Select only, never by Save's check that a new key is free, so the
+    // grids keep what's typed until the record is written.
+    virtual void LoadGrids(const std::string& /*key*/) {}
 
     std::string value(const Values& v, const std::string& field) const;
     static Result Refuse(const std::string& field, const std::string& message) { return {false, field, message}; }

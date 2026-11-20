@@ -45,6 +45,7 @@ void RecordModel::New()
     values_ = Defaults();
     key_.clear();
     isNew_ = true;
+    LoadGrids("");
 }
 
 bool RecordModel::Select(const std::string& key)
@@ -54,6 +55,7 @@ bool RecordModel::Select(const std::string& key)
     values_ = std::move(v);
     key_ = key;
     isNew_ = false;
+    LoadGrids(key);
     return true;
 }
 

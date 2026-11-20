@@ -14,6 +14,7 @@ const PageDesc k_departments{
         {21011, m::kTopLeft},
     },
     {},
+    {},
 };
 
 const PageDesc k_medicalReps{
@@ -42,6 +43,7 @@ const PageDesc k_medicalReps{
         {21018, m::kTopLeft}, {21019, m::kTopLeft}, {21020, m::kTopLeft}, {21102, m::kTopLeft},
         {21021, m::kTopLeft}, {21022, m::kTopLeft},
     },
+    {},
     {},
 };
 
@@ -72,6 +74,7 @@ const PageDesc k_doctors{
         {21021, m::kTopLeft}, {21022, m::kTopLeft},
     },
     {},
+    {},
 };
 
 const PageDesc k_products{
@@ -92,6 +95,7 @@ const PageDesc k_products{
         {21011, m::kTopLeft}, {21012, m::kTopLeft}, {21013, m::kTopLeft}, {21014, m::kTopLeft},
         {21101, m::kTopLeft}, {21015, m::kTopLeft}, {21016, m::kTopLeft},
     },
+    {},
     {},
 };
 
@@ -132,6 +136,7 @@ const PageDesc k_vendors{
         {21201, m::kTopLeft}, {21029, m::kTopLeft},
     },
     {},
+    {},
 };
 
 const PageDesc k_accounts{
@@ -153,6 +158,7 @@ const PageDesc k_accounts{
         {21101, m::kTopLeft}, {21015, m::kTopLeft}, {21016, m::kTopLeft},
     },
     {},
+    {},
 };
 
 const PageDesc k_assetTypes{
@@ -172,6 +178,7 @@ const PageDesc k_assetTypes{
         {21012, m::kTopLeft}, {21301, m::kTopLeft}, {21201, m::kTopLeft}, {21013, m::kTopLeft},
         {21302, m::kTopLeft}, {21202, m::kTopLeft}, {21014, m::kTopLeft},
     },
+    {},
     {},
 };
 
@@ -204,6 +211,29 @@ const PageDesc k_assets{
         {21021, m::kTopLeft}, {21022, m::kTopLeft}, {21023, m::kTopLeft}, {21024, m::kTopLeft},
     },
     {{21003, L"Dis&pose..."}},
+    {},
+};
+
+const PageDesc k_tabCheck{
+    IDD_PG_TABCHECK, L"Tab check", false,
+    {{L"Code", 48, false}, {L"Name", 170, false}},
+    {
+        {21010, "code", FieldKind::Upper, 4, FieldFlag::Key, 0, 0},
+        {21011, "name", FieldKind::Text, 30, FieldFlag::None, 0, 0},
+        {21012, "note", FieldKind::Text, 30, FieldFlag::None, 0, 0},
+        {21013, "amount", FieldKind::Amount, 16, FieldFlag::None, 0, 0},
+        {21014, "account", FieldKind::Account, 7, FieldFlag::None, 21300, 21200},
+    },
+    {
+        {IDC_PG_NEW, m::kTopLeft}, {IDC_PG_SAVE, m::kTopLeft}, {IDC_PG_DELETE, m::kTopLeft},
+        {21000, m::kTopLeft}, {21001, m::kLeftTall}, {21100, m::kTopLeft}, {21010, m::kTopLeft},
+        {21011, m::kTopLeft}, {21004, m::kTopWide}, {21101, m::kTopLeft}, {21400, m::kTopLeft},
+        {21012, m::kTopLeft}, {21401, m::kTopLeft}, {21013, m::kTopLeft}, {21102, m::kTopLeft},
+        {21402, m::kTopLeft}, {21300, m::kTopLeft}, {21200, m::kTopLeft}, {21014, m::kTopLeft},
+        {21005, m::kAll},
+    },
+    {},
+    {{L"Details", 0, "", {21101, 21400, 21012, 21401, 21013, 21102, 21402, 21300, 21200, 21014}}, {L"Budget", 21005, "budget", {21005}}},
 };
 
 const PageDesc k_users{
@@ -222,5 +252,6 @@ const PageDesc k_users{
         {21011, m::kTopLeft}, {21012, m::kTopLeft}, {21013, m::kTopLeft}, {21014, m::kTopLeft},
         {21101, m::kAll}, {21002, m::kAll},
     },
+    {},
     {},
 };

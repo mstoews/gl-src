@@ -2,7 +2,7 @@
 // gl_tests: the list-and-detail pages' models (spec #8 5; plan S8-M2), each
 // through its screen's master criterion on the dev fixture: the rules the
 // classic dialog enforced, D9 (no "modify?"; a taken key refused), and the
-// User Access page's MENUCODE written byte for byte.
+// User Access page's MENUCODE written byte for byte; a record page's grid tab (S9-M0).
 //
 #include "GlTestDb.h"
 
@@ -11,6 +11,7 @@
 #include "Assets.h"
 #include "pages/RecordModels.h"
 
+#include <map>
 #include <string>
 #include <vector>
 
@@ -325,4 +326,104 @@ TEST_CASE("User Access page: users, and the level's MENUCODE byte for byte (S8-M
         CHECK(r.message.find("commands") != std::string::npos);   // written
         CHECK(scalar(db.code, sql) == stored);
     }
+}
+
+namespace {
+
+// A record with a 12-row grid tab (spec #9 S9-M0), kept in memory: the shape
+// Budget Data's tab (S9-M1) and Company Profile's (S9-M2) will have.
+class GridRecordModel : public RecordModel {
+public:
+    explicit GridRecordModel(Code4& code) : RecordModel(code)
+    {
+        grid_.SetColumns({{"period", "Period", fx::model::CellKind::Number, 6, true},
+                          {"budget", "Budget", fx::model::CellKind::Amount, 16}});
+        grid_.SetFixedRows(12);
+        store_["A1"] = {{"code", "A1"}, {"budget3", "300.00"}};
+    }
+    std::string Noun() const override { return "record"; }
+    fx::model::EntryGridModel* Grid(const std::string& key) override { return key == "budget" ? &grid_ : nullptr; }
+    int loads = 0;
+
+protected:
+    std::vector<RecordRow> LoadRows() override
+    {
+        std::vector<RecordRow> rows;
+        for (const auto& [key, v] : store_) rows.push_back({key, {key}});
+        return rows;
+    }
+    bool Read(const std::string& key, Values& out) override
+    {
+        const auto it = store_.find(key);
+        if (it == store_.end()) return false;
+        out = it->second;
+        return true;
+    }
+    std::string KeyOf(const Values& v) const override { return value(v, "code"); }
+    std::string KeyField() const override { return "code"; }
+    Result Write(Values& v, bool) override
+    {
+        Values stored = v;
+        for (int r = 0; r < 12; ++r) stored["budget" + std::to_string(r + 1)] = grid_.Cell(r, "budget");
+        store_[value(v, "code")] = stored;
+        return {true, "", ""};
+    }
+    Result Remove(const std::string& key) override
+    {
+        store_.erase(key);
+        return {true, "", ""};
+    }
+    void LoadGrids(const std::string& key) override
+    {
+        ++loads;
+        const auto it = store_.find(key);
+        std::vector<std::vector<std::string>> rows;
+        for (int r = 1; r <= 12; ++r)
+            rows.push_back({std::to_string(r), it == store_.end() ? "" : value(it->second, "budget" + std::to_string(r))});
+        grid_.SetRows(rows);
+    }
+
+private:
+    fx::model::EntryGridModel grid_;
+    std::map<std::string, Values> store_;
+};
+
+} // namespace
+
+TEST_CASE("Record page grids: loaded on New and Select, kept through Save's key check (S9-M0)", "[pages]")
+{
+    Code4 code;   // the model keeps its records in memory
+    GridRecordModel m(code);
+    m.Load();
+    REQUIRE(m.Grid("budget"));
+    CHECK(m.Grid("other") == nullptr);
+    fx::model::EntryGridModel& g = *m.Grid("budget");
+
+    REQUIRE(m.Select("A1"));
+    CHECK(g.Rows() == 12);
+    CHECK(g.Cell(2, "budget") == "300.00");
+    CHECK(g.Cell(0, "period") == "1");
+
+    // A new record: blank budgets; what's typed is saved, though Save reads
+    // the store first to see whether the new key is taken.
+    m.New();
+    CHECK(g.Cell(2, "budget").empty());
+    m.Set("code", "B2");
+    g.SetCell(4, "budget", "500.00");
+    const int before = m.loads;
+    const RecordModel::Result r = m.Save();
+    REQUIRE(r.ok);
+    CHECK(r.message == "Record B2 saved.");
+    CHECK(m.loads == before + 1);           // once, by the Select after the write
+    CHECK(g.Cell(4, "budget") == "500.00");  // read back from the store
+
+    // A taken key is refused, and the grid keeps what was typed.
+    m.New();
+    m.Set("code", "A1");
+    g.SetCell(0, "budget", "1.00");
+    CHECK_FALSE(m.Save().ok);
+    CHECK(g.Cell(0, "budget") == "1.00");
+    REQUIRE(m.Select("A1"));
+    CHECK(g.Cell(0, "budget").empty());
+    CHECK(g.Cell(2, "budget") == "300.00");
 }

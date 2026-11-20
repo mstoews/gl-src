@@ -15,6 +15,12 @@ page's own buttons) along the top; the filter and the list on the left
 every 14. A group goes in the column it names (1 or 2). An account field is
 the account, its dept and the account's name beside them. Control IDs are
 numbers, per page (each page is its own template): see PortIds.h, "pages".
+
+Tabs (spec #9 S9-M0): a page's `tabs` go below its groups, across both
+columns: a strip of tabs (the Tab control, its row only, no body), then each
+tab's own groups, or a grid (an entry grid's ListView, the model's
+EntryGridModel by its key). The page shows one tab's controls at a time, so
+every control in a tab, labels included, has an ID.
 """
 import os
 import sys
@@ -87,6 +93,13 @@ PAGES = [
                                       ('accumulated', 'Accumulated:', 'amount', 16, ''),
                                       ('monthly', 'Monthly:', 'readonly', 16, ''),
                                       ('bookValue', 'Book value:', 'readonly', 16, '')])]),
+    dict(name='tabCheck', idd='IDD_PG_TABCHECK', title='Tab check',
+         columns=[('Code', 48, 0), ('Name', 170, 0)],
+         groups=[(1, 'Record', [('code', 'C&ode:', 'upper', 4, 'k'), ('name', 'N&ame:', 'text', 30, '')])],
+         tabs=[dict(caption='Details', groups=[(1, 'Details', [('note', 'N&ote:', 'text', 30, ''),
+                                                              ('amount', 'A&mount:', 'amount', 16, '')]),
+                                              (2, 'Account', [('account', 'A&ccount:', 'account', 7, '')])]),
+               dict(caption='Budget', grid='budget')]),
     dict(name='users', idd='IDD_PG_USERS', title='Users', commands=True,
          columns=[('User', 56, 0), ('Description', 150, 0)],
          groups=[(1, 'User', [('username', '&User:', 'upper', 10, 'k'), ('descript', 'D&escription:', 'text', 30, ''),
@@ -98,7 +111,10 @@ KIND = {'text': 'Text', 'upper': 'Upper', 'number': 'Number', 'decimal': 'Decima
         'date': 'Date', 'choice': 'Choice', 'account': 'Account', 'password': 'Password', 'readonly': 'ReadOnly'}
 
 FILTER, LIST, COMMANDS, BUTTON0 = 21000, 21001, 21002, 21003
+TABS, GRID0 = 21004, 21005      # the tab strip; the tabs' grids (21005-21009)
 GROUP0, FIELD0, DEPT0, NAME0 = 21100, 21010, 21300, 21200
+LABEL0 = 21400                  # a label in a tab (the page's own labels are -1)
+GRID_HEIGHT = 12 * 10 + 16      # twelve rows and the header
 WIDTH, MIN_HEIGHT = 600, 330
 
 
@@ -112,6 +128,70 @@ def edit_width(kind, chars):
     if kind == 'choice':
         return 100
     return max(20, min(128, chars * 4 + 8))
+
+
+class Ids:
+    """The next free ID of each kind, across a page's groups and tabs."""
+
+    def __init__(self):
+        self.group, self.field, self.dept, self.name, self.label, self.grid = \
+            GROUP0, FIELD0, DEPT0, NAME0, LABEL0, GRID0
+
+
+def build_groups(groups, columns_y, ids, body, fields, anchors, in_tab):
+    """Lays out `groups` from columns_y; returns the IDs made (for a tab)."""
+    made = []
+    for column, caption, rows in groups:
+        gx = 188 if column == 1 else 396
+        gy = columns_y[column]
+        gh = 14 + 14 * len(rows) + 6
+        body.append('')
+        body.append(' GROUPBOX "%s", %d, %d, %d, 200, %d' % (caption, ids.group, gx, gy, gh))
+        anchors.append((str(ids.group), 'kTopLeft'))
+        made.append(ids.group)
+        ids.group += 1
+        y = gy + 14
+        for key, label, kind, chars, flags in rows:
+            if in_tab:
+                body.append(' LTEXT "%s", %d, %d, %d, 54, 8' % (label, ids.label, gx + 8, y + 2))
+                anchors.append((str(ids.label), 'kTopLeft'))
+                made.append(ids.label)
+                ids.label += 1
+            else:
+                body.append(' LTEXT "%s", -1, %d, %d, 54, 8' % (label, gx + 8, y + 2))
+            fid = ids.field
+            ex = gx + 64
+            dept = name = 0
+            if kind == 'account':
+                body.append(' EDITTEXT %d, %d, %d, 44, 12, ES_UPPERCASE | ES_AUTOHSCROLL' % (fid, ex, y))
+                body.append(' EDITTEXT %d, %d, %d, 20, 12, ES_UPPERCASE | ES_AUTOHSCROLL' % (ids.dept, ex + 46, y))
+                body.append(' LTEXT "", %d, %d, %d, 60, 8, SS_ENDELLIPSIS | SS_NOPREFIX' % (ids.name, ex + 70, y + 2))
+                dept, name = ids.dept, ids.name
+                anchors += [(str(ids.dept), 'kTopLeft'), (str(ids.name), 'kTopLeft')]
+                made += [ids.dept, ids.name]
+                ids.dept += 1
+                ids.name += 1
+            elif kind == 'date':
+                body.append(' CONTROL "", %d, "SysDateTimePick32", DTS_SHORTDATEFORMAT | DTS_SHOWNONE | WS_TABSTOP, '
+                            '%d, %d, %d, 12' % (fid, ex, y, edit_width(kind, chars)))
+            elif kind == 'choice':
+                body.append(' COMBOBOX %d, %d, %d, %d, 80, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP'
+                            % (fid, ex, y, edit_width(kind, chars)))
+            else:
+                style = {'upper': 'ES_UPPERCASE | ES_AUTOHSCROLL', 'number': 'ES_NUMBER | ES_AUTOHSCROLL',
+                         'password': 'ES_PASSWORD | ES_AUTOHSCROLL', 'readonly': 'ES_READONLY | ES_AUTOHSCROLL',
+                         'amount': 'ES_RIGHT | ES_AUTOHSCROLL', 'decimal': 'ES_RIGHT | ES_AUTOHSCROLL'}.get(
+                    kind, 'ES_AUTOHSCROLL')
+                body.append(' EDITTEXT %d, %d, %d, %d, 12, %s' % (fid, ex, y, edit_width(kind, chars), style))
+            anchors.append((str(fid), 'kTopLeft'))
+            made.append(fid)
+            flag = 'FieldFlag::Key' if 'k' in flags else 'FieldFlag::KeyPart' if 'K' in flags else \
+                'FieldFlag::Required' if 'r' in flags else 'FieldFlag::None'
+            fields.append('{%d, "%s", FieldKind::%s, %d, %s, %d, %d}' % (fid, key, KIND[kind], chars, flag, dept, name))
+            ids.field += 1
+            y += 14
+        columns_y[column] = gy + gh + 4
+    return made
 
 
 def build(page):
@@ -130,62 +210,45 @@ def build(page):
     rc.append(' EDITTEXT %d, 4, 24, 176, 12, ES_AUTOHSCROLL' % FILTER)
     anchors += [(str(FILTER), 'kTopLeft'), (str(LIST), 'kLeftTall')]
     columns_y = {1: 20, 2: 20}
-    gid, fid, did, nid = GROUP0, FIELD0, DEPT0, NAME0
+    ids = Ids()
     body = []
-    for column, caption, rows in page['groups']:
-        gx = 188 if column == 1 else 396
-        gy = columns_y[column]
-        gh = 14 + 14 * len(rows) + 6
+    build_groups(page['groups'], columns_y, ids, body, fields, anchors, False)
+    tabs = []   # (caption, grid ID or 0, grid key, [IDs])
+    bottom = max(columns_y.values())
+    if page.get('tabs'):
+        top = bottom
         body.append('')
-        body.append(' GROUPBOX "%s", %d, %d, %d, 200, %d' % (caption, gid, gx, gy, gh))
-        anchors.append((str(gid), 'kTopLeft'))
-        gid += 1
-        y = gy + 14
-        for key, label, kind, chars, flags in rows:
-            body.append(' LTEXT "%s", -1, %d, %d, 54, 8' % (label, gx + 8, y + 2))
-            ex = gx + 64
-            dept = name = 0
-            if kind == 'account':
-                body.append(' EDITTEXT %d, %d, %d, 44, 12, ES_UPPERCASE | ES_AUTOHSCROLL' % (fid, ex, y))
-                body.append(' EDITTEXT %d, %d, %d, 20, 12, ES_UPPERCASE | ES_AUTOHSCROLL' % (did, ex + 46, y))
-                body.append(' LTEXT "", %d, %d, %d, 60, 8, SS_ENDELLIPSIS | SS_NOPREFIX' % (nid, ex + 70, y + 2))
-                dept, name = did, nid
-                anchors += [(str(did), 'kTopLeft'), (str(nid), 'kTopLeft')]
-                did += 1
-                nid += 1
-            elif kind == 'date':
-                body.append(' CONTROL "", %d, "SysDateTimePick32", DTS_SHORTDATEFORMAT | DTS_SHOWNONE | WS_TABSTOP, '
-                            '%d, %d, %d, 12' % (fid, ex, y, edit_width(kind, chars)))
-            elif kind == 'choice':
-                body.append(' COMBOBOX %d, %d, %d, %d, 80, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP'
-                            % (fid, ex, y, edit_width(kind, chars)))
+        body.append(' CONTROL "", %d, "SysTabControl32", WS_TABSTOP, 188, %d, 408, 14' % (TABS, top))
+        anchors.append((str(TABS), 'kTopWide'))
+        for tab in page['tabs']:
+            y0 = top + 18
+            if 'grid' in tab:
+                gid = ids.grid
+                ids.grid += 1
+                body.append(' CONTROL "", %d, "SysListView32", LVS_REPORT | LVS_SINGLESEL | LVS_SHOWSELALWAYS | '
+                            'LVS_OWNERDATA | WS_BORDER | WS_TABSTOP, 188, %d, 408, %d' % (gid, y0, GRID_HEIGHT))
+                anchors.append((str(gid), 'kAll'))
+                tabs.append((tab['caption'], gid, tab['grid'], [gid]))
+                bottom = max(bottom, y0 + GRID_HEIGHT + 4)
             else:
-                style = {'upper': 'ES_UPPERCASE | ES_AUTOHSCROLL', 'number': 'ES_NUMBER | ES_AUTOHSCROLL',
-                         'password': 'ES_PASSWORD | ES_AUTOHSCROLL', 'readonly': 'ES_READONLY | ES_AUTOHSCROLL',
-                         'amount': 'ES_RIGHT | ES_AUTOHSCROLL', 'decimal': 'ES_RIGHT | ES_AUTOHSCROLL'}.get(
-                    kind, 'ES_AUTOHSCROLL')
-                body.append(' EDITTEXT %d, %d, %d, %d, 12, %s' % (fid, ex, y, edit_width(kind, chars), style))
-            anchors.append((str(fid), 'kTopLeft'))
-            flag = 'FieldFlag::Key' if 'k' in flags else 'FieldFlag::KeyPart' if 'K' in flags else \
-                'FieldFlag::Required' if 'r' in flags else 'FieldFlag::None'
-            fields.append('{%d, "%s", FieldKind::%s, %d, %s, %d, %d}' % (fid, key, KIND[kind], chars, flag, dept, name))
-            fid += 1
-            y += 14
-        columns_y[column] = gy + gh + 4
+                tab_y = {1: y0, 2: y0}
+                made = build_groups(tab['groups'], tab_y, ids, body, fields, anchors, True)
+                tabs.append((tab['caption'], 0, '', made))
+                bottom = max(bottom, max(tab_y.values()))
     if page.get('commands'):
         top = 20
         body.append('')
-        body.append(' GROUPBOX "The level\'s commands", %d, 396, %d, 200, %d' % (gid, top, MIN_HEIGHT - 24))
+        body.append(' GROUPBOX "The level\'s commands", %d, 396, %d, 200, %d' % (ids.group, top, MIN_HEIGHT - 24))
         body.append(' CONTROL "", %d, "SysListView32", LVS_REPORT | LVS_SINGLESEL | LVS_SHOWSELALWAYS | '
                     'LVS_NOCOLUMNHEADER | WS_BORDER | WS_TABSTOP, 404, %d, 184, %d' % (COMMANDS, top + 14, MIN_HEIGHT - 44))
-        anchors += [(str(gid), 'kAll'), (str(COMMANDS), 'kAll')]
-        gid += 1
-    height = max(MIN_HEIGHT, max(columns_y.values()) + 4)
+        anchors += [(str(ids.group), 'kAll'), (str(COMMANDS), 'kAll')]
+        ids.group += 1
+    height = max(MIN_HEIGHT, bottom + 4)
     rc.insert(4 + len(extra), ' CONTROL "", %d, "SysListView32", LVS_REPORT | LVS_SINGLESEL | LVS_SHOWSELALWAYS | '
                               'LVS_OWNERDATA | WS_BORDER | WS_TABSTOP, 4, 40, 176, %d' % (LIST, height - 44))
     text = ['%s DIALOGEX 0, 0, %d, %d' % (page['idd'], WIDTH, height), 'STYLE DS_CONTROL | WS_CHILD',
             'EXSTYLE WS_EX_CONTROLPARENT', 'FONT 9, "Segoe UI"', '{'] + rc + body + ['}', '']
-    return text, fields, anchors, extra
+    return text, fields, anchors, extra, tabs
 
 
 def main(root):
@@ -194,7 +257,7 @@ def main(root):
     inc = ['// PageDescs.inc - generated by gl/res/tools/make_pages.py (spec #8 S8-M2). Do not edit.',
            '// The list-and-detail pages\' descriptors (RecordPage.h), included once by RecordPages.cpp.', '']
     for page in PAGES:
-        text, fields, anchors, extra = build(page)
+        text, fields, anchors, extra, tabs = build(page)
         rc += ['// ---- %s ' % page['title'] + '-' * (72 - len(page['title'])), ''] + text
         cols = ', '.join('{L"%s", %d, %s}' % (h, w, 'true' if r else 'false') for h, w, r in page['columns'])
         inc.append('const PageDesc k_%s{' % page['name'])
@@ -214,6 +277,8 @@ def main(root):
         inc.append(line)
         inc.append('    },')
         inc.append('    {%s},' % ', '.join('{%d, L"%s"}' % (bid, t) for bid, (t, _) in zip(extra, page.get('buttons', []))))
+        inc.append('    {%s},' % ', '.join('{L"%s", %d, "%s", {%s}}' % (c, g, k, ', '.join(str(i) for i in made))
+                                           for c, g, k, made in tabs))
         inc.append('};')
         inc.append('')
     with open(os.path.join(root, 'res', 'pages.rc'), 'w', newline='\r\n', encoding='ascii') as f:

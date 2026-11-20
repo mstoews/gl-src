@@ -21,6 +21,11 @@
 //   Ctrl+Delete  remove this row (undoable)         -
 //   Ctrl+Z       put back the last row removed      -
 //
+// Fixed rows (spec #9 D2; SetFixedRows): the grid has exactly that many rows
+// and no blank row at the end, as Budget Data's 12 periods do. Insert,
+// Ctrl+Delete and Ctrl+Z do nothing, SetRows pads or cuts to the count, and
+// Tab or Enter on the last row's last cell stays there.
+//
 // A read-only column is skipped by Tab and never edited. Amount columns
 // marked `total` are summed in cents (Total). After a commit, OnCommit lets
 // the page react (an account fills its name; a debit clears the credit).
@@ -71,15 +76,19 @@ public:
     int ColumnOf(const std::string& key) const;   // -1 if none
 
     // ---- the rows ----
-    int Rows() const noexcept { return static_cast<int>(rows_.size()); }   // with the blank row at the end
+    // A fixed number of rows (> 0), or 0 for the usual grid with its blank row.
+    // Setting it clears the grid to that many blank rows.
+    void SetFixedRows(int count);
+    int fixedRows() const noexcept { return fixed_; }
+    int Rows() const noexcept { return static_cast<int>(rows_.size()); }   // with the blank row at the end, if not fixed
     int Lines() const;                                                      // rows with any text
     bool IsBlank(int row) const;
     const std::string& Cell(int row, int col) const;
     std::string Cell(int row, const std::string& key) const;
     void SetCell(int row, int col, const std::string& text);                // no checks, no OnCommit
     void SetCell(int row, const std::string& key, const std::string& text);
-    void Clear();                                                           // one blank row
-    void SetRows(const std::vector<std::vector<std::string>>& rows);        // then the blank row
+    void Clear();                                                           // one blank row (fixed: that many)
+    void SetRows(const std::vector<std::vector<std::string>>& rows);        // then the blank row (fixed: padded or cut)
 
     // ---- the current cell ----
     int row() const noexcept { return row_; }
@@ -123,6 +132,7 @@ private:
     std::vector<std::vector<std::string>> rows_;
     std::vector<std::pair<int, std::vector<std::string>>> removed_;   // (row, cells)
     int row_ = 0, col_ = 0;
+    int fixed_ = 0;
     bool editing_ = false;
     std::string edit_, message_;
 };
