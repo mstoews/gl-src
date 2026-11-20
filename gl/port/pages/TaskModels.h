@@ -45,6 +45,8 @@ struct TaskStep {
 namespace data_group {
 constexpr unsigned kGlVouchers = 1, kGlBalances = 2, kAp = 4, kAr = 8, kAssets = 16, kMasters = 32, kReports = 64;
 constexpr unsigned kCompany = 128;   // the company profile and its periods: the frame's status bar (spec #9 S9-M2)
+constexpr unsigned kRights = 256;    // accessm / accessl: the frame reads the rights again (Restore, spec #9 S9-M4)
+constexpr unsigned kAll = 511;       // every table: a restored company (S9-M4)
 }
 
 enum class VoucherKind { Gl, ApInvoice, ApCash, Ar };
@@ -109,6 +111,15 @@ public:
     // Another command the page offers (Print cheques: 4091, its preview); 0 for none.
     virtual unsigned short PageCommand() const { return 0; }
     virtual std::string PageCommandLabel() const { return {}; }
+
+    // ---- Restore (spec #9 D7, S9-M4) ----
+    // The action button is the row command (on the selected row, on the page, not a job).
+    virtual bool ActionOnRow() const { return false; }
+    // The row command replaces the company file: the workspace's other pages close first.
+    virtual bool ClosesOtherPages() const { return false; }
+    // A file the page lets the user choose (Browse...), added to the list and selected.
+    virtual std::string BrowseLabel() const { return {}; }   // "" for none
+    virtual int AddFile(cb4sqlite::Code4& /*code*/, const std::string& /*utf8Path*/) { return -1; }   // its row, after Load
 };
 
 // Runs a task as its job does, on `code`: per item, each checked selectable
@@ -148,3 +159,9 @@ std::unique_ptr<TaskModel> MakeChequesTask();
 // time); a made one listed with why it can't be; Void on a row (VoidCheque,
 // dated by the same date), asked first.
 std::unique_ptr<TaskModel> MakeBankReconciliationTask();
+// Restore Databases (spec #9 D7, S9-M4): the backups beside the company file
+// `currentUtf8` (newest first), and any added by Browse; each checked with
+// CheckRestoreFile, a file that fails listed with why. Restore (on the
+// selected file, asked first, with the consequence) is RestoreDatabase on the
+// page's connection, after the page has closed the others.
+std::unique_ptr<TaskModel> MakeRestoreTask(const std::string& currentUtf8);

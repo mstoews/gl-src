@@ -397,6 +397,7 @@
 #define CM_TK_BACKUP_CLASSIC        20541   // Backup Databases (1072)
 #define CM_TK_CONFIRM_CLASSIC       20547   // Confirm Printed Cheques (8074): the Cheques page since spec #9 S9-M3
 #define CM_TK_BANKREC_CLASSIC       20548   // Bank Reconciliation (6085): its task page since spec #9 S9-M3
+#define CM_TK_RESTORE_CLASSIC       20549   // Restore Databases (1074): its task page since spec #9 S9-M4
 // Spec #8 S8-M5.
 #define CM_HOME                 20542   // the home page (the navigation pane's first item)
 #define CM_COMMAND_SEARCH       20543   // Ctrl+K: command search

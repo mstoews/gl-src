@@ -18,6 +18,14 @@
 //     gate, and the list is loaded again. Print cheques sends 4091 to the
 //     frame (the preview, Q3). Their classic dialogs are "(classic)" entries.
 //     (S8-M4's note said Confirm Printed Cheques prints; it doesn't.)
+//   - Spec #9 S9-M4 (D7): Restore Databases (1074) is a task page. Its list
+//     is the backups beside the company file and any Browse adds; Restore acts
+//     on the selected one, on the page (it closes the company connection, so
+//     not as a job): asked first, then every other page is closed (each asking
+//     about its unsaved changes, as closing the program does; Home stays, it
+//     holds no tables), then RestoreDatabase. Every data group is broadcast
+//     after, so the frame shows the company and period again and reads the
+//     rights again, as ID_RESTORE did.
 //
 #include "TaskPages.h"
 
@@ -30,6 +38,7 @@
 #include "model/JobState.h"   // JobGate
 
 #include <CommCtrl.h>
+#include <commdlg.h>   // Restore's Browse... (S9-M4)
 #include <Uxtheme.h>
 
 #include <algorithm>
@@ -101,6 +110,8 @@ const std::vector<TaskCommand>& commands()
          [] { return MakeBackupTask(fx::WideToUtf8(CurDir), today()); }},
         {8074, CM_TK_CONFIRM_CLASSIC, L"Confirm Printed Cheques (classic)", [] { return MakeChequesTask(); }},   // spec #9 S9-M3
         {6085, CM_TK_BANKREC_CLASSIC, L"Bank Reconciliation (classic)", [] { return MakeBankReconciliationTask(); }},
+        {1074, CM_TK_RESTORE_CLASSIC, L"Restore Databases (classic)",   // spec #9 S9-M4
+         [] { return MakeRestoreTask(fx::WideToUtf8(CurDir)); }},
     };
     return all;
 }
@@ -216,7 +227,10 @@ protected:
     bool OnFormCommand(WORD id, WORD code, HWND) override
     {
         if (code == BN_CLICKED) switch (id) {
-            case IDC_TK_ACTION: Start(true); return true;
+            case IDC_TK_ACTION:
+                if (model_->ActionOnRow()) RunRowCommand();   // Restore: on the selected row, on the page
+                else Start(true);
+                return true;
             case IDC_TK_STOP:
                 job_.Cancel();
                 SetText(IDC_TK_RESULT, model_->PerItem() ? "Stopping after this voucher..." : "Stopping...");
@@ -225,7 +239,11 @@ protected:
             case IDC_TK_NONE: CheckAll(id == IDC_TK_ALL); return true;
             case IDC_TK_REFRESH: Load(); return true;
             case IDC_TK_ROW: RunRowCommand(); return true;
-            case IDC_TK_PAGECMD:   // Print cheques: the frame runs 4091, the preview
+            case IDC_TK_PAGECMD:   // Print cheques: the frame runs 4091, the preview; Restore's Browse...
+                if (!model_->BrowseLabel().empty()) {
+                    Browse();
+                    return true;
+                }
                 if (host() && model_->PageCommand())
                     PostMessageW(host()->hostWindow(), WM_COMMAND, model_->PageCommand(), 0);
                 return true;
@@ -343,11 +361,13 @@ private:
     // The cheque pages' commands (spec #9 S9-M3); other tasks hide them.
     void ShowRowCommands()
     {
-        const bool row = !model_->RowAction().empty(), input = !model_->RowInputLabel().empty();
-        const bool page = model_->PageCommand() != 0;
+        const bool row = !model_->RowAction().empty() && !model_->ActionOnRow(), input = !model_->RowInputLabel().empty();
+        const bool page = model_->PageCommand() != 0 || !model_->BrowseLabel().empty();
         if (row) SetDlgItemTextW(form(), IDC_TK_ROW, wide(model_->RowAction()).c_str());
         if (input) SetDlgItemTextW(form(), IDC_TK_LROWIN, wide(model_->RowInputLabel()).c_str());
-        if (page) SetDlgItemTextW(form(), IDC_TK_PAGECMD, wide(model_->PageCommandLabel()).c_str());
+        if (page)
+            SetDlgItemTextW(form(), IDC_TK_PAGECMD,
+                            wide(model_->BrowseLabel().empty() ? model_->PageCommandLabel() : model_->BrowseLabel()).c_str());
         ShowWindow(Item(IDC_TK_ROW), row ? SW_SHOW : SW_HIDE);
         ShowWindow(Item(IDC_TK_LROWIN), input ? SW_SHOW : SW_HIDE);
         ShowWindow(Item(IDC_TK_ROWIN), input ? SW_SHOW : SW_HIDE);
@@ -382,6 +402,10 @@ private:
         ReadOption();
         model_->rowInput = Text(IDC_TK_ROWIN);
         const TaskRow row = rows_[static_cast<size_t>(sel)];
+        if (!row.selectable && model_->ActionOnRow()) {   // a backup that can't be restored: say why
+            ShowInfo(fx::InfoKind::Warning, wide(row.note));
+            return;
+        }
         const std::string question = model_->RowQuestion(row);
         if (!question.empty()) {
             std::wstring action = wide(model_->RowAction());
@@ -390,6 +414,10 @@ private:
             if (fx::Ask(host() ? host()->hostWindow() : hwnd(), szApp, wide(question), L"",
                         {{kGo, action + L" " + wide(model_->Noun(1))}, {IDCANCEL, L"Keep it"}}, IDCANCEL, IDCANCEL) != kGo)
                 return;
+        }
+        if (model_->ClosesOtherPages() && !CloseOtherPages()) {
+            ShowInfo(fx::InfoKind::Information, L"Nothing was restored: a page was kept open.");
+            return;
         }
         TaskStep s;
         try {
@@ -403,6 +431,53 @@ private:
             Broadcast(model_->Groups());
         }
         ShowInfo(s.ok ? fx::InfoKind::Success : fx::InfoKind::Error, wide(s.note));
+    }
+
+    // Restore (spec #9 D7): every page but this one and Home closes first, each
+    // asking about its unsaved changes; false if one stayed open.
+    bool CloseOtherPages()
+    {
+        auto* ws = host() ? dynamic_cast<fx::Workspace*>(host()) : nullptr;
+        if (!ws) return true;
+        const std::vector<HWND> all = ws->pages();
+        for (HWND h : all) {
+            if (h == hwnd() || !IsWindow(h)) continue;
+            auto* p = dynamic_cast<fx::HostedPage*>(fx::Window::FromHandle(h));
+            if (p && p->commandId == CM_HOME) continue;   // it holds no tables, and is always open
+            ws->ClosePage(h);
+            if (IsWindow(h)) return false;
+        }
+        return true;
+    }
+
+    // Restore's Browse...: a file from anywhere, added to the list and selected.
+    void Browse()
+    {
+        std::wstring file(MAX_PATH, L'\0');
+        static const wchar_t kFilter[] = L"Company databases (*.db;*.bak)\0*.db;*.bak\0All files (*.*)\0*.*\0";
+        OPENFILENAMEW ofn{};
+        ofn.lStructSize = sizeof ofn;
+        ofn.hwndOwner = host() ? host()->hostWindow() : hwnd();
+        ofn.lpstrFilter = kFilter;
+        ofn.lpstrFile = file.data();
+        ofn.nMaxFile = MAX_PATH;
+        ofn.lpstrTitle = L"Restore Databases";
+        ofn.Flags = OFN_FILEMUSTEXIST | OFN_PATHMUSTEXIST | OFN_NOCHANGEDIR | OFN_HIDEREADONLY;
+        if (!GetOpenFileNameW(&ofn)) return;
+        file.resize(wcslen(file.c_str()));
+        int at = -1;
+        try {
+            at = model_->AddFile(cb, fx::WideToUtf8(file));
+        } catch (const std::exception& e) {
+            ShowInfo(fx::InfoKind::Error, wide(e.what()));
+        }
+        Load();
+        if (at >= 0) {
+            ListView_SetItemState(list_, at, LVIS_SELECTED | LVIS_FOCUSED, LVIS_SELECTED | LVIS_FOCUSED);
+            ListView_EnsureVisible(list_, at, FALSE);
+            if (static_cast<size_t>(at) < rows_.size() && !rows_[static_cast<size_t>(at)].selectable)
+                ShowInfo(fx::InfoKind::Warning, wide(rows_[static_cast<size_t>(at)].note));
+        }
     }
 
     void ReadOption()
