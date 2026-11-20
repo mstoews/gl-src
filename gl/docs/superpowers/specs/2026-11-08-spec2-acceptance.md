@@ -233,7 +233,7 @@ Record `glaccts` and `gl_dist` for 101's accounts (111101, 410001-10, 410001-20)
 
 ## Redesign (Spec #8)
 
-The figures and checks above stay as they are. Spec #8 (`2026-11-19-owl-to-win32-sdk-port-spec8-design.md`, §15 criterion 2) moved many screens into pages in the main window; this table says where each step whose screen moved is done in the redesigned program. Until Spec #8's acceptance the old dialog of each moved screen is still reachable as a "(classic)" entry in the navigation pane, so each step can be done either way. Transaction Inquiry (#9), Company Profile and Restore are still dialogs. Budget Data (#10) is the Chart of Accounts page's Budget tab since Spec #9 S9-M1 (`plans/2026-11-20-owl-to-win32-sdk-port-spec9-plan.md`); its dialog is "Budget Data (classic)" until Spec #9's acceptance.
+The figures and checks above stay as they are. Spec #8 (`2026-11-19-owl-to-win32-sdk-port-spec8-design.md`, §15 criterion 2) moved many screens into pages in the main window; this table says where each step whose screen moved is done in the redesigned program. Until Spec #8's acceptance the old dialog of each moved screen is still reachable as a "(classic)" entry in the navigation pane, so each step can be done either way. Transaction Inquiry (#9) and Restore are still dialogs. Since Spec #9 (`plans/2026-11-20-owl-to-win32-sdk-port-spec9-plan.md`), Budget Data (#10) is the Chart of Accounts page's Budget tab (S9-M1), and Company Profile is a page with Company, Periods, Accounts and Banks tabs (S9-M2). Their dialogs are "Budget Data (classic)" and "Company Profile (classic)" until Spec #9's acceptance.
 
 | Criterion and step | Where it's done now | What differs |
 |---|---|---|
@@ -273,6 +273,7 @@ The figures and checks above stay as they are. Spec #8 (`2026-11-19-owl-to-win32
 | 13. The account list behaves as the Spec #1 sheet's #7 | Chart of Accounts page | The list is a filtered list, not a grid. See the Spec #1 sheet's redesign table for #7: the query, saved position and close/Search steps are done in Chart of Accounts (classic). |
 | 13. User Access, the Menu button: toggle a menu, OK saves, Close doesn't | User Access page | The selected user's level's commands are check boxes grouped by menu (checked = allowed), not PLUS / MINUS pictures. Save saves; leaving the user or closing the page with changes asks about them. |
 | 13. Right-click the account list and set the query `ACCOUNT = '4'` | Chart of Accounts (classic) | The page's list has no query. |
+| 13. File > Company Profile, Accounts (1033), then Cash (1034): the list (1011) shows 102101 and 101000 | Company Profile page: the Accounts tab, then the Banks tab | One page with tabs, not three dialogs. The Banks tab is a grid of the banks (101000 Petty Cash, 102101 Checking Account, in account order); a row is edited in place, added in the blank row and removed with Ctrl+Delete, and Save writes them. There is no "Already added, modify?" (6022) or delete question (6024). |
 | 14. The Spec #1 sheet's criteria still pass | As in the Spec #1 sheet's redesign table | None. |
 
 ## Gaps and triage

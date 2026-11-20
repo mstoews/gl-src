@@ -207,7 +207,7 @@ The figures and checks above stay as they are. Spec #8 (`2026-11-19-owl-to-win32
 | 7. Right-click the list for List Window Parameters | Chart of Accounts (classic) | The page's list has no query. |
 | 7. Move and resize the list, then reopen | Chart of Accounts (classic) | The page's list is part of the page and isn't saved to `GL.INI`. |
 | 7. Close the list with its X, then click Search | Chart of Accounts (classic) | The page's list can't be closed. |
-| 8. The rows on dialog 1010 (Account, Current balance) | Chart of Accounts (classic) | They test the `tbPic` and `tbFloat` controls, which the classic dialog still uses. The 1021 and `trivial_dialog.exe` rows are unchanged. |
+| 8. The rows on dialog 1010 (Account, Current balance) | Chart of Accounts (classic) | They test the `tbPic` and `tbFloat` controls, which the classic dialog still uses. The 1021 rows are done on "Company Profile (classic)": since Spec #9 S9-M2, File > Company Profile opens a page whose phone is a plain edit. The `trivial_dialog.exe` rows are unchanged. |
 
 ## Gaps and triage
 

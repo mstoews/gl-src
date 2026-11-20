@@ -21,6 +21,10 @@ columns: a strip of tabs (the Tab control, its row only, no body), then each
 tab's own groups, or a grid (an entry grid's ListView, the model's
 EntryGridModel by its key). The page shows one tab's controls at a time, so
 every control in a tab, labels included, has an ID.
+
+A page with `nolist` (spec #9 S9-M2: Company Profile) is one record: no
+filter, no list, no New or Delete; its groups and tabs start at the left
+edge (x 4) instead of beside the list.
 """
 import os
 import sys
@@ -96,6 +100,23 @@ PAGES = [
                                       ('accumulated', 'Accumulated:', 'amount', 16, ''),
                                       ('monthly', 'Monthly:', 'readonly', 16, ''),
                                       ('bookValue', 'Book value:', 'readonly', 16, '')])]),
+    # Spec #9 S9-M2 (D3): Company Profile, one record with four tabs (pages/CompanyModel.h).
+    dict(name='company', idd='IDD_PG_COMPANY', title='Company Profile', nolist=True,
+         buttons=[('&Reset depreciation flag...', 'resetDepreciation')],
+         columns=[('Company', 170, 0)], groups=[],
+         tabs=[dict(caption='Company',
+                    groups=[(1, 'Company', [('company', 'C&ompany:', 'text', 40, ''),
+                                            ('address1', 'Street:', 'text', 50, ''), ('address2', 'City:', 'text', 50, ''),
+                                            ('address3', 'State/Country:', 'text', 50, ''),
+                                            ('postal', 'Postal code:', 'text', 9, ''), ('phone', 'P&hone:', 'text', 16, ''),
+                                            ('fax', 'Fa&x:', 'text', 16, ''), ('contact', 'Co&ntact:', 'text', 20, '')]),
+                            (2, 'The books', [('firstDay', 'Year starts:', 'readonly', 10, ''),
+                                              ('lastDay', 'Year ends:', 'readonly', 10, ''),
+                                              ('dataPath', 'Database:', 'readonly', 60, ''),
+                                              ('withholding', '&W/H tax:', 'choice', 1, '')])]),
+               dict(caption='Periods', grid='periods'),
+               dict(caption='Accounts', grid='accounts'),
+               dict(caption='Banks', grid='banks')]),
     dict(name='tabCheck', idd='IDD_PG_TABCHECK', title='Tab check',
          columns=[('Code', 48, 0), ('Name', 170, 0)],
          groups=[(1, 'Record', [('code', 'C&ode:', 'upper', 4, 'k'), ('name', 'N&ame:', 'text', 30, '')])],
@@ -141,11 +162,11 @@ class Ids:
             GROUP0, FIELD0, DEPT0, NAME0, LABEL0, GRID0
 
 
-def build_groups(groups, columns_y, ids, body, fields, anchors, in_tab):
+def build_groups(groups, columns_y, ids, body, fields, anchors, in_tab, left=188):
     """Lays out `groups` from columns_y; returns the IDs made (for a tab)."""
     made = []
     for column, caption, rows in groups:
-        gx = 188 if column == 1 else 396
+        gx = left if column == 1 else left + 208
         gy = columns_y[column]
         gh = 14 + 14 * len(rows) + 6
         body.append('')
@@ -200,28 +221,32 @@ def build_groups(groups, columns_y, ids, body, fields, anchors, in_tab):
 def build(page):
     rc, fields, anchors = [], [], []
     x = 4
-    buttons = [('&New', 'IDC_PG_NEW'), ('&Save', 'IDC_PG_SAVE'), ('&Delete', 'IDC_PG_DELETE')]
+    nolist = page.get('nolist', False)
+    left = 4 if nolist else 188
+    buttons = [('&Save', 'IDC_PG_SAVE')] if nolist else \
+        [('&New', 'IDC_PG_NEW'), ('&Save', 'IDC_PG_SAVE'), ('&Delete', 'IDC_PG_DELETE')]
     extra = []
     for i, (text, _) in enumerate(page.get('buttons', [])):
         buttons.append((text, str(BUTTON0 + i)))
         extra.append(BUTTON0 + i)
     for text, ident in buttons:
-        w = 48 if len(text) <= 8 else 60
+        w = 48 if len(text) <= 8 else max(60, len(text) * 4 + 8)   # "&Reset depreciation flag..." (S9-M2)
         rc.append(' PUSHBUTTON "%s", %s, %d, 4, %d, 14' % (text, ident, x, w))
         anchors.append((ident, 'kTopLeft'))
         x += w + 4
-    rc.append(' EDITTEXT %d, 4, 24, 176, 12, ES_AUTOHSCROLL' % FILTER)
-    anchors += [(str(FILTER), 'kTopLeft'), (str(LIST), 'kLeftTall')]
+    if not nolist:
+        rc.append(' EDITTEXT %d, 4, 24, 176, 12, ES_AUTOHSCROLL' % FILTER)
+        anchors += [(str(FILTER), 'kTopLeft'), (str(LIST), 'kLeftTall')]
     columns_y = {1: 20, 2: 20}
     ids = Ids()
     body = []
-    build_groups(page['groups'], columns_y, ids, body, fields, anchors, False)
+    build_groups(page['groups'], columns_y, ids, body, fields, anchors, False, left)
     tabs = []   # (caption, grid ID or 0, grid key, [IDs])
     bottom = max(columns_y.values())
     if page.get('tabs'):
         top = bottom
         body.append('')
-        body.append(' CONTROL "", %d, "SysTabControl32", WS_TABSTOP, 188, %d, 408, 14' % (TABS, top))
+        body.append(' CONTROL "", %d, "SysTabControl32", WS_TABSTOP, %d, %d, %d, 14' % (TABS, left, top, 596 - left))
         anchors.append((str(TABS), 'kTopWide'))
         for tab in page['tabs']:
             y0 = top + 18
@@ -229,13 +254,13 @@ def build(page):
                 gid = ids.grid
                 ids.grid += 1
                 body.append(' CONTROL "", %d, "SysListView32", LVS_REPORT | LVS_SINGLESEL | LVS_SHOWSELALWAYS | '
-                            'LVS_OWNERDATA | WS_BORDER | WS_TABSTOP, 188, %d, 408, %d' % (gid, y0, GRID_HEIGHT))
+                            'LVS_OWNERDATA | WS_BORDER | WS_TABSTOP, %d, %d, %d, %d' % (gid, left, y0, 596 - left, GRID_HEIGHT))
                 anchors.append((str(gid), 'kAll'))
                 tabs.append((tab['caption'], gid, tab['grid'], [gid]))
                 bottom = max(bottom, y0 + GRID_HEIGHT + 4)
             else:
                 tab_y = {1: y0, 2: y0}
-                made = build_groups(tab['groups'], tab_y, ids, body, fields, anchors, True)
+                made = build_groups(tab['groups'], tab_y, ids, body, fields, anchors, True, left)
                 tabs.append((tab['caption'], 0, '', made))
                 bottom = max(bottom, max(tab_y.values()))
     if page.get('commands'):
@@ -247,8 +272,9 @@ def build(page):
         anchors += [(str(ids.group), 'kAll'), (str(COMMANDS), 'kAll')]
         ids.group += 1
     height = max(MIN_HEIGHT, bottom + 4)
-    rc.insert(4 + len(extra), ' CONTROL "", %d, "SysListView32", LVS_REPORT | LVS_SINGLESEL | LVS_SHOWSELALWAYS | '
-                              'LVS_OWNERDATA | WS_BORDER | WS_TABSTOP, 4, 40, 176, %d' % (LIST, height - 44))
+    if not nolist:
+        rc.insert(4 + len(extra), ' CONTROL "", %d, "SysListView32", LVS_REPORT | LVS_SINGLESEL | LVS_SHOWSELALWAYS | '
+                                  'LVS_OWNERDATA | WS_BORDER | WS_TABSTOP, 4, 40, 176, %d' % (LIST, height - 44))
     text = ['%s DIALOGEX 0, 0, %d, %d' % (page['idd'], WIDTH, height), 'STYLE DS_CONTROL | WS_CHILD',
             'EXSTYLE WS_EX_CONTROLPARENT', 'FONT 9, "Segoe UI"', '{'] + rc + body + ['}', '']
     return text, fields, anchors, extra, tabs
@@ -264,7 +290,8 @@ def main(root):
         rc += ['// ---- %s ' % page['title'] + '-' * (72 - len(page['title'])), ''] + text
         cols = ', '.join('{L"%s", %d, %s}' % (h, w, 'true' if r else 'false') for h, w, r in page['columns'])
         inc.append('const PageDesc k_%s{' % page['name'])
-        inc.append('    %s, L"%s", %s,' % (page['idd'], page['title'], 'true' if page.get('commands') else 'false'))
+        inc.append('    %s, L"%s", %s, %s,' % (page['idd'], page['title'], 'true' if page.get('commands') else 'false',
+                                          'true' if page.get('nolist') else 'false'))
         inc.append('    {%s},' % cols)
         inc.append('    {')
         inc += ['        %s,' % f for f in fields]

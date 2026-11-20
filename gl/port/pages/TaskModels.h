@@ -44,6 +44,7 @@ struct TaskStep {
 // The groups of tables a task changes (spec #8 9.3, NotifyDataChanged).
 namespace data_group {
 constexpr unsigned kGlVouchers = 1, kGlBalances = 2, kAp = 4, kAr = 8, kAssets = 16, kMasters = 32, kReports = 64;
+constexpr unsigned kCompany = 128;   // the company profile and its periods: the frame's status bar (spec #9 S9-M2)
 }
 
 enum class VoucherKind { Gl, ApInvoice, ApCash, Ar };

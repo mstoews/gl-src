@@ -18,6 +18,7 @@
 #include "pages/RecordPage.h"
 #include "pages/VoucherPages.h"
 #include "pages/TaskPages.h"
+#include "pages/TaskModels.h"   // data_group
 #include "pages/HomePages.h"
 #include "DataChanged.h"
 #include "model/JobState.h"
@@ -269,7 +270,7 @@ bool ManilaGL::OnCommand(WORD id, WORD code, HWND ctl)
     case CM_USERS_CLASSIC:                 // Maintenance > User Access (ID_ACCESS): the dialogs (a page since S8-M2)
         RunUserAdministration(hwnd());
         return true;
-    case ID_COMPANYPROFILE:                // TGlWindow::GLCompanySet
+    case CM_PROFILE_CLASSIC:               // (ID_COMPANYPROFILE) TGlWindow::GLCompanySet; 6015 is the page (spec #9 S9-M2)
         RunCompanyProfile(hwnd());
         RefreshStatus();                   // the original updated a status bar it never created
         return true;
@@ -554,6 +555,7 @@ bool ManilaGL::OnMessage(UINT msg, WPARAM wp, LPARAM lp, LRESULT& result)
     if (msg == WM_SETTINGCHANGE || msg == WM_THEMECHANGED || msg == WM_DWMCOLORIZATIONCOLORCHANGED)
         fx::ApplyFrameLook(hwnd());   // the theme, transparency or high contrast changed
     if (msg == kDataChanged) {   // spec #8 9.3: a save or a job changed the books, or a job started
+        if (wp & data_group::kCompany) RefreshStatus();   // the company and the period (spec #9 S9-M2)
         RefreshWaiting();
         ApplyRights();             // writing commands off while a job holds the books
         result = 0;
