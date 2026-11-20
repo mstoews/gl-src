@@ -8,6 +8,9 @@
 //   - The first time, a period starts at the current period and a date range
 //     at the current period's dates; after that, at the last answers (kept
 //     until the program exits by RunUserReport).
+//   - Spec #8 G1: the same questions are also a panel above a user report's
+//     preview (IDD_PNL_RW_PROMPT: the rows without OK and Cancel); OK's checks
+//     are Read's, and the panel shrinks to its rows.
 //
 #include "ReportPrompt.h"
 
@@ -16,6 +19,7 @@
 #include "../Ar.h"         // LoadCustomers
 #include "../Globals.h"
 #include "../MainDialog.h"
+#include "ReportOptions.h"  // ReportPanel
 #include "RunReport.h"     // CurrentReportContext
 
 #include <algorithm>
@@ -43,18 +47,77 @@ struct Question {
     std::string label;
 };
 
-class PromptDialog : public MainDialog {
+class PromptDialog : public MainDialog, public ReportPanel {
 public:
-    PromptDialog(const rw::ReportDefinition& def, rw::Answers& answers, bool closeAtOnce)
-        : def_(def), answers_(answers), closeAtOnce_(closeAtOnce)
+    PromptDialog(const rw::ReportDefinition& def, rw::Answers& answers, bool closeAtOnce, bool panel = false)
+        : def_(def), answers_(answers), closeAtOnce_(closeAtOnce), panel_(panel)
     {
+    }
+
+    // As a panel (spec #8 G1).
+    HWND Create(HWND parent) override
+    {
+        HWND h = CreateModeless(hInst, IDD_PNL_RW_PROMPT, parent);
+        if (h) fx::AddModeless(h);
+        return h;
+    }
+
+    // OK's checks: false with the reason shown and the focus on the answer.
+    bool Read() override
+    {
+        rw::Answers next = answers_;
+        const rw::Source* src = rw::FindSource(def_.source);
+        for (size_t row = 0; row < questions_.size(); ++row) {
+            const Question& q = questions_[row];
+            const int r = static_cast<int>(row);
+            std::vector<std::string> values;
+            for (int side = 0; side < (q.pair ? 2 : 1); ++side) {
+                switch (q.input) {
+                case Input::Period:
+                case Input::Customer:
+                case Input::Vendor: values.push_back(ComboValue((side ? IDC_RWP_COMBO2 : IDC_RWP_COMBO1) + r, q.input)); break;
+                case Input::Date: values.push_back(GetDate((side ? IDC_RWP_DATE2 : IDC_RWP_DATE1) + r)); break;
+                case Input::Text: values.push_back(Text((side ? IDC_RWP_EDIT2 : IDC_RWP_EDIT1) + r)); break;
+                }
+            }
+            if (q.test == rw::Test::In && q.input == Input::Text) {   // comma-separated
+                std::vector<std::string> list;
+                std::string cur;
+                for (char ch : values[0] + ",") {
+                    if (ch == ',') {
+                        if (!TrimText(cur).empty()) list.push_back(TrimText(cur));
+                        cur.clear();
+                    } else {
+                        cur += ch;
+                    }
+                }
+                values = list;
+            }
+            bool empty = values.empty();
+            for (const std::string& v : values) empty = empty || (v.empty() && q.test != rw::Test::Equal && q.test != rw::Test::NotEqual);
+            rw::Filter check = def_.filters[q.filter];
+            check.ask = false;
+            check.values = values;
+            std::string why = empty ? "Answer \"" + q.label.substr(0, q.label.size() - 1) + "\"." : std::string();
+            if (why.empty() && src) why = rw::FilterProblem(*src, check);
+            if (!why.empty()) {
+                Message(wide(why), MB_ICONINFORMATION);
+                SetFocus(GetDlgItem(hwnd(), (q.input == Input::Date ? IDC_RWP_DATE1 : q.input == Input::Text ? IDC_RWP_EDIT1 : IDC_RWP_COMBO1) + r));
+                return false;
+            }
+            next[q.filter] = values;
+        }
+        answers_ = next;
+        return true;
     }
 
 protected:
     bool OnInitDialog() override
     {
-        MainDialog::OnInitDialog();
-        SetWindowTextW(hwnd(), wide(def_.name).c_str());
+        if (!panel_) {
+            MainDialog::OnInitDialog();
+            SetWindowTextW(hwnd(), wide(def_.name).c_str());
+        }
         const rw::Source* src = rw::FindSource(def_.source);
         const ReportContext ctx = CurrentReportContext();
         for (size_t k = 0; k < def_.filters.size() && questions_.size() < rw::kMaxQuestions; ++k) {
@@ -87,13 +150,17 @@ protected:
         for (int row = 0; row < static_cast<int>(rw::kMaxQuestions); ++row) ShowRow(row, ctx);
         Shrink();
         if (closeAtOnce_) PostMessageW(hwnd(), WM_COMMAND, IDCANCEL, 0);
-        return true;
+        return !panel_;   // a panel leaves the focus where it is
     }
 
     bool OnCommand(WORD id, WORD code, HWND ctl) override
     {
+        if (panel_) {
+            if (id == IDOK) SendMessageW(GetParent(hwnd()), WM_COMMAND, IDOK, 0);   // Enter: the preview refreshes
+            return id == IDOK || id == IDCANCEL;
+        }
         if (code == BN_CLICKED && id == IDOK) {
-            Ok();
+            if (Read()) End(IDOK);
             return true;
         }
         if (code == BN_CLICKED && id == IDCANCEL) {   // not MainDialog::Cancel: the caller's tables stay open
@@ -101,6 +168,12 @@ protected:
             return true;
         }
         return MainDialog::OnCommand(id, code, ctl);
+    }
+
+    bool OnDestroy() override
+    {
+        if (panel_) fx::RemoveModeless(hwnd());
+        return false;
     }
 
 private:
@@ -175,10 +248,18 @@ private:
         }
     }
 
-    // The dialog ends below its last row.
+    // The dialog ends below its last row; a panel, 16 units a row.
     void Shrink()
     {
         const int rows = std::max(1, static_cast<int>(questions_.size()));
+        if (panel_) {
+            RECT h{0, 0, 0, 16 * rows + 6};
+            MapDialogRect(hwnd(), &h);
+            RECT w{};
+            GetWindowRect(hwnd(), &w);
+            SetWindowPos(hwnd(), nullptr, 0, 0, w.right - w.left, h.bottom, SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
+            return;
+        }
         RECT unit{0, 22 + 20 * rows + 4, 0, 0};
         MapDialogRect(hwnd(), &unit);
         RECT ok{};
@@ -214,57 +295,10 @@ private:
                                                                           : std::string();
     }
 
-    void Ok()
-    {
-        rw::Answers next = answers_;
-        const rw::Source* src = rw::FindSource(def_.source);
-        for (size_t row = 0; row < questions_.size(); ++row) {
-            const Question& q = questions_[row];
-            const int r = static_cast<int>(row);
-            std::vector<std::string> values;
-            for (int side = 0; side < (q.pair ? 2 : 1); ++side) {
-                switch (q.input) {
-                case Input::Period:
-                case Input::Customer:
-                case Input::Vendor: values.push_back(ComboValue((side ? IDC_RWP_COMBO2 : IDC_RWP_COMBO1) + r, q.input)); break;
-                case Input::Date: values.push_back(GetDate((side ? IDC_RWP_DATE2 : IDC_RWP_DATE1) + r)); break;
-                case Input::Text: values.push_back(Text((side ? IDC_RWP_EDIT2 : IDC_RWP_EDIT1) + r)); break;
-                }
-            }
-            if (q.test == rw::Test::In && q.input == Input::Text) {   // comma-separated
-                std::vector<std::string> list;
-                std::string cur;
-                for (char ch : values[0] + ",") {
-                    if (ch == ',') {
-                        if (!TrimText(cur).empty()) list.push_back(TrimText(cur));
-                        cur.clear();
-                    } else {
-                        cur += ch;
-                    }
-                }
-                values = list;
-            }
-            bool empty = values.empty();
-            for (const std::string& v : values) empty = empty || (v.empty() && q.test != rw::Test::Equal && q.test != rw::Test::NotEqual);
-            rw::Filter check = def_.filters[q.filter];
-            check.ask = false;
-            check.values = values;
-            std::string why = empty ? "Answer \"" + q.label.substr(0, q.label.size() - 1) + "\"." : std::string();
-            if (why.empty() && src) why = rw::FilterProblem(*src, check);
-            if (!why.empty()) {
-                Message(wide(why), MB_ICONINFORMATION);
-                SetFocus(GetDlgItem(hwnd(), (q.input == Input::Date ? IDC_RWP_DATE1 : q.input == Input::Text ? IDC_RWP_EDIT1 : IDC_RWP_COMBO1) + r));
-                return;
-            }
-            next[q.filter] = values;
-        }
-        answers_ = next;
-        End(IDOK);
-    }
-
     const rw::ReportDefinition& def_;
     rw::Answers& answers_;
     bool closeAtOnce_;
+    bool panel_;
     std::vector<Question> questions_;
     using Codes_ = std::vector<std::pair<std::string, std::string>>;   // number, name
     const Codes_& Codes(Input input) const { return input == Input::Vendor ? vendors_ : customers_; }
@@ -280,4 +314,9 @@ bool AskReportQuestions(HWND owner, const rw::ReportDefinition& def, rw::Answers
     if (!any) return true;
     PromptDialog dlg(def, answers, closeAtOnce);
     return dlg.DoModal(IDD_RW_PROMPT, owner) == IDOK;
+}
+
+std::unique_ptr<ReportPanel> MakeQuestionsPanel(const rw::ReportDefinition& def, rw::Answers& answers)
+{
+    return std::make_unique<PromptDialog>(def, answers, false, true);
 }

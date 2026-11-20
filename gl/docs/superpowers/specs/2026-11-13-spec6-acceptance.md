@@ -199,6 +199,45 @@ Each previews; print at least the landscape ones to PDF and check that no column
 | G5 | The Linux ASan/UBSan build hasn't been run for Spec #6. | No Linux machine this round. | Run `tools/linux/build_tests.sh --run`. |
 | G6 | **Nothing has run against the deployed company's AR tables.** Its customer master is real; its transaction tables are empty (spec §2.7). | The plan forbids it before go-live is agreed. | A go-live checklist step: back up, then open Sales Customers on a copy first. |
 
+## Redesign (Spec #8)
+
+The figures and checks above stay as they are. This table says where each step whose screen moved is done in the redesigned program (Spec #8, §15 criterion 2). Until Spec #8's acceptance, the old dialog of each moved screen is still reachable as a "(classic)" entry in the navigation pane, so each step can be done either way.
+
+Steps are numbered within their criterion: "2, step 3" is the third check box under criterion 2. Steps not listed use screens that didn't move (the reports and the `sqlite3` queries).
+
+| Criterion and step | Where it's done now | What differs |
+|---|---|---|
+| 1, step 1 | Customers page, **New** | There is no **Options** dialog: the AR, sales and VAT accounts are lookups on the page, filled in from `GL_SETAT` (111101, 410001, 260007), with the dept and the account's name beside them. **Save** is refused with the sales account field marked ("Not an account in the chart."). |
+| 1, step 2 | Customers page | Type sales dept `20`, VAT 10 and terms 15 on the page; **Save**. |
+| 1, step 3 | Customers page | Pick C004 in the list (type to filter it), change the terms to 45, **Save**: no "modify?" question. Picking it again shows terms 45. |
+| 1, step 4 | Customers page | Pick C001, **Delete**; the task dialog asks with named buttons. The refusal shows in the information bar. |
+| 1, step 5 | Customers page | Pick C004, **Delete**, confirm in the task dialog. |
+| 1, step 6 | Customers page | Typing `C999` in the list's filter leaves the list empty; there's no **Find**. |
+| 2, step 1 | Sales voucher page (Sales Invoice Vouchers) | The customer is a lookup; choosing C001 fills its accounts, VAT %, terms and VAT No. The voucher number (7) is assigned when it's first saved. |
+| 2, step 2 | Sales voucher page | Type the line in the product grid: quantity 3, unit price 1,100.00 makes the amount 3,300.00. The Sales / VAT / AR lines under the grid show as you type; there's no **Add** per line. **Save** saves the voucher. |
+| 2, step 3 | Sales voucher page | A second grid row with amount 220.00 typed and no price; the lines under the grid are recomputed as you type. |
+| 2, step 4 | Sales voucher page | Delete the row in the grid, then **Save**. |
+| 2, step 5 | Sales voucher page | Run the query after **Save**. |
+| 2, step 6 | Sales voucher page | Save voucher 7, then **New**. **Save** with invoice S-1001, then S-1003, is refused in the information bar; nothing is saved. |
+| 2, step 7 | Sales voucher page | The memo is beside the computed lines and is saved with the voucher by **Save**: no **Memo** window, **Top** / **Next** or **File > Save**. Leave the page instead of **Close**. |
+| 3, step 1 | Cancel Voucher > Sales task page | Tick voucher 2 (nothing starts checked), press the action button, confirm in the task dialog. |
+| 3, step 2 | Post Voucher > Sales task page | Vouchers 1 and 7 are listed and checked. The result line reports what was posted, instead of a message box. |
+| 3, step 3 | Recover Sales Voucher task page | Tick voucher 7 (nothing starts checked), press the action button, confirm. |
+| 3, step 4 | Post Voucher > Sales task page, or **Post** on the sales voucher page with voucher 7 shown | Voucher 7 starts checked. |
+| 3, step 7 | Recover Sales Voucher task page | Voucher 4's row says why it can't be recovered and has no check box. |
+| 4, step 1 | Update AR and AP task page | The summary shows what's waiting; the action button runs it; the result line names the GL vouchers made (104 for AP, 105 for AR). It runs in the background. |
+| 4, step 2 | Post Voucher > General Ledger task page | Every postable voucher starts checked: leave only 105 checked. |
+| 4, step 7 | Recover Sales Voucher task page, then Update AR and AP task page | Voucher 7's row says why it can't be recovered and has no check box. The Update page shows nothing waiting to transfer. |
+| 5 (all steps) | Receipts page | Pick the invoice in the open invoices on the left (filter to find it), then on the right choose the bank, type the date and amount (it starts at what's owed), and **Record receipt** instead of **Clear**. |
+| 5, step 1 | Receipts page | The amount already shows 3,300.00. |
+| 5, step 2 | Receipts page | There is no **Partial** box: record 1,000.00, then 500.00, each with "Discount the rest" unticked. There is no question about a discount; the box decides. |
+| 5, step 3 | Receipts page | Tick "Discount the rest (early payment)" instead of **Discount**. |
+| 5, step 4 | Receipts page | 700.00 is refused with the amount field marked ("That's more than is owed."). |
+| 6, steps 1 and 2 | Receipts page | There is no **Receipts** list: pick the invoice, then **Reverse last receipt** and confirm in the task dialog ("Reverse receipt" / "Keep it"); the result reads "Receipt 5 reversed: 2,300.00 is owed on the invoice." For S-1004 tick "Show paid invoices" in place of **View All**. The reversal of a transferred receipt is dated by the page's **Date** field (today unless changed), not always today; a date in no open period is refused on that field. |
+| 6, step 4 | Update AR and AP task page, then Post Voucher > General Ledger task page | The result line names GL vouchers 106 and 107. On the Post page leave 106 and 107 checked. |
+| 7, step 1 | Purge Received Receivables task page | Type the date in "Received before:" on the page; the list shows the settled invoices that go. |
+| 7, step 2 | Purge Received Receivables task page | Press the action button, confirm in the task dialog; the result line reports what was purged. |
+
 ## Gaps and triage
 
 Every `FAIL` above gets a line here.

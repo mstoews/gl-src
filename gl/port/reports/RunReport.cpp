@@ -25,6 +25,7 @@
 #include "report/win32/Preview.h"
 
 #include <cstdio>
+#include <iterator>
 #include <map>
 #include <memory>
 #include <optional>
@@ -72,15 +73,32 @@ std::optional<rpt::Report> build(HWND owner, const ReportOptionsFn& options, con
     }
 }
 
-// The sample report's options and builder, sharing one SampleOptions so
-// Options... starts from the last choice.
-std::pair<ReportOptionsFn, ReportBuilder> sampleReport(SampleOptions start = {}, bool withDialog = true)
+// G1: a ReportPanel and its builder as the preview's options panel. The
+// builder is declared first so the panel (which may refer to what the
+// builder holds) goes first.
+class PanelAdapter : public rpt::win32::OptionsPanel {
+public:
+    PanelAdapter(std::unique_ptr<ReportPanel> panel, ReportBuilder builder)
+        : builder_(std::move(builder)), panel_(std::move(panel))
+    {
+    }
+    HWND CreatePanel(HWND parent) override { return panel_->Create(parent); }
+    std::optional<rpt::Report> Rebuild(HWND owner) override
+    {
+        if (!panel_->Read()) return std::nullopt;
+        return build(owner, {}, builder_);
+    }
+
+private:
+    ReportBuilder builder_;
+    std::unique_ptr<ReportPanel> panel_;
+};
+
+// The sample report's options, kept for the session.
+SampleOptions& sampleOptions()
 {
-    auto opt = std::make_shared<SampleOptions>(start);
-    ReportOptionsFn options;
-    if (withDialog) options = [opt](HWND owner) { return ShowSampleOptions(owner, *opt); };
-    ReportBuilder builder = [opt](const ReportContext& ctx) { return BuildSampleReport(cb, ctx, *opt); };
-    return {options, builder};
+    static SampleOptions opt;
+    return opt;
 }
 
 // The options each report keeps for the session (spec #3 5.6).
@@ -105,14 +123,10 @@ StatementOptions& statementOptions(int which)
 
 using StatementBuilder = rpt::Report (*)(cb4sqlite::Code4&, const ReportContext&, const StatementOptions&);
 
-void runStatement(fx::PageHost& frame, int which, const wchar_t* title, StatementBuilder builder)
+void runStatement(fx::PageHost& frame, int which, StatementBuilder builder)
 {
-    RunReport(
-        frame,
-        [which, title](HWND owner) {
-            return ShowStatementOptions(owner, CurrentReportContext(), title, which == 0, statementOptions(which));
-        },
-        [which, builder](const ReportContext& ctx) { return builder(cb, ctx, statementOptions(which)); });
+    RunReportWithPanel(frame, MakeStatementPanel(CurrentReportContext(), which == 0, statementOptions(which)),
+                       [which, builder](const ReportContext& ctx) { return builder(cb, ctx, statementOptions(which)); });
 }
 
 // A hidden workspace for /stress: the previews open as its tabs, as in the
@@ -151,6 +165,16 @@ bool stressOnce(fx::PageHost& frame, const ReportBuilder& builder)
 
 } // namespace
 
+HWND RunReportWithPanel(fx::PageHost& frame, std::unique_ptr<ReportPanel> panel, ReportBuilder builder,
+                        std::optional<rpt::Report> first)
+{
+    std::optional<rpt::Report> r = first ? std::move(first) : build(frame.hostWindow(), {}, builder);
+    if (!r) return nullptr;
+    HWND p = rpt::win32::OpenPreview(frame, std::move(*r), std::make_unique<PanelAdapter>(std::move(panel), std::move(builder)));
+    if (!p) MessageBoxW(frame.hostWindow(), L"The report preview could not be opened.", szApp, MB_OK | MB_ICONSTOP);
+    return p;
+}
+
 void RunReport(fx::PageHost& frame, ReportOptionsFn options, ReportBuilder builder)
 {
     std::optional<rpt::Report> r = build(frame.hostWindow(), options, builder);
@@ -169,28 +193,25 @@ ReportContext CurrentReportContext()
 
 void RunSampleReport(fx::PageHost& frame)
 {
-    auto [options, builder] = sampleReport();
-    RunReport(frame, std::move(options), std::move(builder));
+    RunReportWithPanel(frame, MakeSamplePanel(sampleOptions()),
+                       [](const ReportContext& ctx) { return BuildSampleReport(cb, ctx, sampleOptions()); });
 }
 
 void RunTrialBalance(fx::PageHost& frame)
 {
-    RunReport(
-        frame, [](HWND owner) { return ShowTrialBalanceOptions(owner, CurrentReportContext(), trialBalanceOptions()); },
-        [](const ReportContext& ctx) { return TrialBalance(cb, ctx, trialBalanceOptions()); });
+    RunReportWithPanel(frame, MakeTrialBalancePanel(CurrentReportContext(), trialBalanceOptions()),
+                       [](const ReportContext& ctx) { return TrialBalance(cb, ctx, trialBalanceOptions()); });
 }
 
 void RunDistributionTrialBalance(fx::PageHost& frame)
 {
-    RunReport(
-        frame,
-        [](HWND owner) { return ShowDistTrialBalanceOptions(owner, CurrentReportContext(), distTrialBalanceOptions()); },
-        [](const ReportContext& ctx) { return DistributionTrialBalance(cb, ctx, distTrialBalanceOptions()); });
+    RunReportWithPanel(frame, MakeDistTrialBalancePanel(CurrentReportContext(), distTrialBalanceOptions()),
+                       [](const ReportContext& ctx) { return DistributionTrialBalance(cb, ctx, distTrialBalanceOptions()); });
 }
 
-void RunIncomeStatement(fx::PageHost& frame) { runStatement(frame, 0, L"Income Statement", &IncomeStatement); }
-void RunBalanceSheet(fx::PageHost& frame) { runStatement(frame, 1, L"Balance Sheet", &BalanceSheet); }
-void RunCashFlowStatement(fx::PageHost& frame) { runStatement(frame, 2, L"Cash Flow Statement", &CashFlowStatement); }
+void RunIncomeStatement(fx::PageHost& frame) { runStatement(frame, 0, &IncomeStatement); }
+void RunBalanceSheet(fx::PageHost& frame) { runStatement(frame, 1, &BalanceSheet); }
+void RunCashFlowStatement(fx::PageHost& frame) { runStatement(frame, 2, &CashFlowStatement); }
 
 void RunTrialBalanceByDept(fx::PageHost& frame)
 {
@@ -344,17 +365,32 @@ void RunUserReport(fx::PageHost& frame, long number)
         bool asks = false;
         for (const rw::Filter& f : p.definition->filters) asks = asks || f.ask;
         if (asks) {
-            // Asked when run (D6): the prompt is the report's options, so the
-            // preview's Options... asks again. The answers last until exit.
+            // Asked when run (D6): the questions are the report's options, a
+            // panel above the preview (G1). The answers last until exit; the
+            // first time there are none, so the preview starts empty and
+            // Refresh builds it.
             static std::map<long, rw::Answers> lastAnswers;
             auto def = std::make_shared<rw::ReportDefinition>(*p.definition);
-            RunReport(
-                frame, [def, number](HWND owner) { return AskReportQuestions(owner, *def, lastAnswers[number]); },
+            const bool answered = lastAnswers.count(number) != 0;
+            rw::Answers& answers = lastAnswers[number];
+            std::optional<rpt::Report> first;
+            if (!answered) {
+                rpt::Report empty;
+                empty.title = name;
+                empty.subtitles = {"Answer the report's questions above, then Refresh."};
+                empty.company = CurrentReportContext().company;
+                first = std::move(empty);
+            }
+            HWND preview = RunReportWithPanel(
+                frame, MakeQuestionsPanel(*def, answers),
                 [def, number](const ReportContext& ctx) {
                     rw::BuildResult r = rw::BuildReport(cb, ctx, *def, lastAnswers[number]);
                     if (!r.report) throw std::runtime_error(r.refusal);
                     return std::move(*r.report);
-                });
+                },
+                std::move(first));
+            if (preview && !answered)
+                if (HWND panel = rpt::win32::PreviewPanel(preview)) SetFocus(GetNextDlgTabItem(panel, nullptr, FALSE));
             return;
         }
         b = rw::BuildReport(cb, CurrentReportContext(), *p.definition);
@@ -391,7 +427,7 @@ int StressReports(int times)
     // one with voucher lines (landscape), F3 with every column and its
     // accounts (landscape), F4 and F5; then every original report.
     const ReportBuilder builders[] = {
-        sampleReport(three, false).second,
+        [three](const ReportContext& ctx) { return BuildSampleReport(cb, ctx, three); },
         [](const ReportContext& ctx) { return TrialBalance(cb, ctx, {}); },
         [lines](const ReportContext& ctx) { return DistributionTrialBalance(cb, ctx, lines); },
         [everything](const ReportContext& ctx) { return IncomeStatement(cb, ctx, everything); },
@@ -423,6 +459,30 @@ int StressReports(int times)
         for (const ApReportEntry& r : kArReportTable) {
             const ApBuilder build = r.build;
             if (!stressOnce(frame, [build](const ReportContext& ctx) { return build(cb, ctx); })) return false;
+        }
+        // G1: the options panels, each opened, refreshed and closed (the session's options).
+        {
+            const ReportContext ctx = CurrentReportContext();
+            std::unique_ptr<ReportPanel> panels[] = {
+                MakeSamplePanel(sampleOptions()),
+                MakeTrialBalancePanel(ctx, trialBalanceOptions()),
+                MakeDistTrialBalancePanel(ctx, distTrialBalanceOptions()),
+                MakeStatementPanel(ctx, true, statementOptions(0)),
+                MakeStatementPanel(ctx, false, statementOptions(1)),
+            };
+            const ReportBuilder panelBuilders[] = {
+                [](const ReportContext& c) { return BuildSampleReport(cb, c, sampleOptions()); },
+                [](const ReportContext& c) { return TrialBalance(cb, c, trialBalanceOptions()); },
+                [](const ReportContext& c) { return DistributionTrialBalance(cb, c, distTrialBalanceOptions()); },
+                [](const ReportContext& c) { return IncomeStatement(cb, c, statementOptions(0)); },
+                [](const ReportContext& c) { return BalanceSheet(cb, c, statementOptions(1)); },
+            };
+            for (size_t i = 0; i < std::size(panels); ++i) {
+                HWND pv = RunReportWithPanel(frame, std::move(panels[i]), panelBuilders[i]);
+                if (!pv || !rpt::win32::PreviewPanel(pv) || !rpt::win32::RefreshPreview(pv)) return false;
+                frame.ClosePage(pv);
+                if (IsWindow(pv)) return false;
+            }
         }
         // The user reports (spec #7) that build.
         for (const rw::StoredDefinition& d : rw::LoadDefinitions(cb)) {

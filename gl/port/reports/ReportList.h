@@ -41,3 +41,12 @@ struct ReportChoice {
 
 // Shows dialog 1022 over `owner`.
 ReportChoice ShowReportList(HWND owner);
+
+// Export... and Import... (spec #7 6.1), shared by the list and the report
+// gallery (spec #8 G2). Export writes user report `number`'s definition to a
+// .gldef file the user names; Import saves the file the user picks as a new
+// report and returns its number. Each says what went wrong over `owner`;
+// Import returns 0 when cancelled or refused. Import needs the Report Writer
+// right: the callers grey it without.
+void ExportReportDefinition(HWND owner, long number);
+long ImportReportDefinition(HWND owner);

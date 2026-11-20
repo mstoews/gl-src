@@ -256,6 +256,19 @@ Run these on the test machine, logged in as `ADMIN`. Every report opens with its
 | G5 | The Linux ASan/UBSan build of the Spec #3 sources hasn't been run since S3-M1. | No Linux machine in this round. | Run `tools/linux/build_tests.sh --run`. |
 | G6 | ~~#8 is blocked.~~ | S3-M4 is built (2026-11-11). | None. |
 
+## Redesign (Spec #8)
+
+The figures and checks above stay as they are. Spec #8 moved some screens onto pages in one window (`2026-11-19-owl-to-win32-sdk-port-spec8-design.md`, §15 criterion 2); this table says where each step whose screen moved is done in the redesigned program. Until Spec #8's acceptance, the old dialog of each moved screen is still reachable as a "(classic)" entry in the navigation pane, so the step can be done either way.
+
+| Criterion and step | Where it's done now | What differs |
+|---|---|---|
+| The criteria (opening line); 1, first and fourth steps; 2 to 7 (each report's options) | The report's preview tab: its options are a row above the page (spec #8 G1). | No options dialog comes first: the report opens at once with the session's last options (the current period the first time). Change them in the row and press **Refresh** (or Enter in the row) in place of **Options...** and **OK**. The figures, and the message "The To period comes before the From period.", are the same. |
+| 8, last step (clerk) | Compare Statement Layout with the Chart of Accounts page's command (menu and navigation pane). | Chart of Accounts opens a page, not a dialog. Statement Layout is still a dialog. |
+| 9, step 2 (Year End Consolidation) | The Year End Consolidation task page: its action button, then **Yes** in the task dialog. | It runs in the background with progress. The result line, not a message box, gives the amount taken to retained earnings, the **27** lines archived and the **1** voucher closed; 340000's new balance (−18,290.00) is checked by the next steps. |
+| 10, Voucher Entry's Print | The GL voucher page, **Print slip** (spec #8 G7). | The slip opens in a preview tab, not a window over the screen. A new voucher, or one with unsaved changes, isn't printed: the information bar says to save it first. |
+| 11, step 2 (**File > Print** with no preview) | The report gallery page (spec #8 G7). | The gallery opens instead of "Print Custom Report" (1022): open **Medical Representatives**, then **Trial Balance** (its preview, with the period row above it). Dialog 1022 is **Reporting > Custom Report (classic)**. |
+| 11, step 3 (Custom Report, and right-click > Custom Report) | The report gallery page. | Reports are grouped by menu, then user reports, with search, favourites and recent, instead of the 1022 list. A report opens its preview in a tab, with its options above it. **File > Print** with no preview active opens the gallery too (step 2). |
+
 ## Gaps and triage
 
 Add one row for each `FAIL` or unexpected behaviour found during the walkthrough.

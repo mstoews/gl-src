@@ -11,6 +11,7 @@
 #include <windowsx.h>
 
 #include <algorithm>
+#include <iterator>
 #include <string>
 
 #pragma comment(lib, "comctl32.lib")
@@ -29,6 +30,93 @@ constexpr WORD kTabClose = 1, kTabCloseOthers = 2, kTabPin = 3;
 
 Workspace* gKeyWorkspace = nullptr;   // the workspace whose keys the message loop filters
 
+constexpr int kNavIcon96 = 16;
+
+bool highContrast()
+{
+    HIGHCONTRASTW hc{sizeof hc};
+    return SystemParametersInfoW(SPI_GETHIGHCONTRAST, sizeof hc, &hc, 0) && (hc.dwFlags & HCF_HIGHCONTRASTON);
+}
+
+// A navigation icon's colour: a group's is the system's link colour, a command's the text
+// colour; under high contrast both are the text colour, as the theme sets it.
+COLORREF navIconColor(bool group)
+{
+    return group && !highContrast() ? GetSysColor(COLOR_HOTLIGHT) : GetSysColor(COLOR_WINDOWTEXT);
+}
+
+// lParam of a navigation row: the command in the low word; 1 + the offset of its dimmed
+// suffix in the high word (0: none).
+LPARAM navParam(WORD id, size_t dimFrom)
+{
+    const DWORD dim = dimFrom == std::wstring::npos || dimFrom >= 0xFFFF ? 0 : static_cast<DWORD>(dimFrom) + 1;
+    return static_cast<LPARAM>(dim << 16 | id);
+}
+
+// The system icon font at `px`: Segoe Fluent Icons (Windows 11), else Segoe MDL2 Assets.
+HFONT iconFont(int px)
+{
+    for (const wchar_t* face : {L"Segoe Fluent Icons", L"Segoe MDL2 Assets"}) {
+        HFONT f = CreateFontW(-px, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS,
+                              CLIP_DEFAULT_PRECIS, ANTIALIASED_QUALITY, DEFAULT_PITCH, face);
+        if (!f) continue;
+        HDC dc = CreateCompatibleDC(nullptr);
+        HGDIOBJ old = SelectObject(dc, f);
+        wchar_t got[LF_FACESIZE] = {};
+        GetTextFaceW(dc, LF_FACESIZE, got);
+        SelectObject(dc, old);
+        DeleteDC(dc);
+        if (_wcsicmp(got, face) == 0) return f;
+        DeleteObject(f);
+    }
+    return nullptr;
+}
+
+// `glyph` drawn in `color` on a transparent px x px icon (alpha from the glyph's coverage).
+HICON glyphIcon(HFONT font, wchar_t glyph, int px, COLORREF color)
+{
+    BITMAPINFO bi{};
+    bi.bmiHeader.biSize = sizeof bi.bmiHeader;
+    bi.bmiHeader.biWidth = px;
+    bi.bmiHeader.biHeight = -px;
+    bi.bmiHeader.biPlanes = 1;
+    bi.bmiHeader.biBitCount = 32;
+    bi.bmiHeader.biCompression = BI_RGB;
+    void* bits = nullptr;
+    HDC dc = CreateCompatibleDC(nullptr);
+    HBITMAP color32 = CreateDIBSection(dc, &bi, DIB_RGB_COLORS, &bits, nullptr, 0);
+    if (!color32 || !bits) {
+        DeleteDC(dc);
+        return nullptr;
+    }
+    HGDIOBJ oldBmp = SelectObject(dc, color32);
+    HGDIOBJ oldFont = SelectObject(dc, font);
+    RECT rc{0, 0, px, px};
+    FillRect(dc, &rc, static_cast<HBRUSH>(GetStockObject(WHITE_BRUSH)));
+    SetBkMode(dc, TRANSPARENT);
+    SetTextColor(dc, RGB(0, 0, 0));
+    DrawTextW(dc, &glyph, 1, &rc, DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
+    GdiFlush();
+    SelectObject(dc, oldFont);
+    SelectObject(dc, oldBmp);
+    DeleteDC(dc);
+    // Black on white: the coverage is 255 less the brightness. Straight alpha, as an icon's.
+    auto* p = static_cast<DWORD*>(bits);
+    const DWORD rgb = static_cast<DWORD>(GetRValue(color)) << 16 | static_cast<DWORD>(GetGValue(color)) << 8 |
+                      GetBValue(color);
+    for (int i = 0; i < px * px; ++i) {
+        const DWORD cover = 255 - (p[i] & 0xFF);
+        p[i] = cover ? (cover << 24 | rgb) : 0;
+    }
+    std::vector<BYTE> zeros(static_cast<size_t>(((px + 15) / 16) * 2 * px), 0);
+    HBITMAP mask = CreateBitmap(px, px, 1, 1, zeros.data());
+    ICONINFO ii{TRUE, 0, 0, mask, color32};
+    HICON icon = CreateIconIndirect(&ii);
+    DeleteObject(mask);
+    DeleteObject(color32);
+    return icon;
+}
+
 bool ctrlDown() { return (GetKeyState(VK_CONTROL) & 0x8000) != 0; }
 bool shiftDown() { return (GetKeyState(VK_SHIFT) & 0x8000) != 0; }
 
@@ -41,6 +129,8 @@ Workspace::~Workspace()
         if (CurrentKeyFilter() == &Workspace::FilterKey) SetKeyFilter(nullptr);
     }
     if (uiFont_) DeleteObject(uiFont_);
+    if (navGroupFont_) DeleteObject(navGroupFont_);
+    if (navImages_) ImageList_Destroy(navImages_);
 }
 
 HWND Workspace::CreateWorkspace(HINSTANCE inst, const wchar_t* className, const wchar_t* title, HMENU menu,
@@ -50,7 +140,9 @@ HWND Workspace::CreateWorkspace(HINSTANCE inst, const wchar_t* className, const 
     windowMenu_ = (menu && windowMenuPos >= 0) ? GetSubMenu(menu, windowMenuPos) : nullptr;
     INITCOMMONCONTROLSEX icc{sizeof icc, ICC_TAB_CLASSES | ICC_TREEVIEW_CLASSES | ICC_BAR_CLASSES};
     InitCommonControlsEx(&icc);
-    if (!EnsureWindowClass(inst, className, icon, reinterpret_cast<HBRUSH>(COLOR_APPWORKSPACE + 1))) return nullptr;
+    // The window's ground (behind the toolbar's edge, and the page area before a page opens):
+    // the dialog face, as Windows 11 apps show it, not the MDI client's dark grey.
+    if (!EnsureWindowClass(inst, className, icon, reinterpret_cast<HBRUSH>(COLOR_BTNFACE + 1))) return nullptr;
     return Create(0, className, title, WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN, CW_USEDEFAULT, CW_USEDEFAULT,
                   CW_USEDEFAULT, CW_USEDEFAULT, nullptr, menu, inst);
 }
@@ -70,18 +162,27 @@ void Workspace::SetUiFont()
     for (HWND h : {nav_, tabs_})
         if (h) SendMessageW(h, WM_SETFONT, reinterpret_cast<WPARAM>(uiFont_), TRUE);
     if (old) DeleteObject(old);
+    LOGFONTW semibold = ncm.lfMessageFont;
+    semibold.lfWeight = FW_SEMIBOLD;
+    HFONT oldGroup = navGroupFont_;
+    navGroupFont_ = CreateFontIndirectW(&semibold);
+    if (oldGroup) DeleteObject(oldGroup);
 }
 
 bool Workspace::OnCreate(LPCREATESTRUCTW)
 {
     nav_ = CreateWindowExW(0, WC_TREEVIEWW, L"Navigation",
-                           WS_CHILD | WS_VISIBLE | WS_TABSTOP | TVS_HASBUTTONS | TVS_SHOWSELALWAYS | TVS_FULLROWSELECT |
-                               TVS_TRACKSELECT | TVS_SINGLEEXPAND,
+                           // The arrows show which rows open and whether they're open (not only the
+                           // group icons' colour); they always show (no TVS_EX_FADEINOUTEXPANDOS).
+                           // TVS_NOHSCROLL: a long title never scrolls the tree sideways (Home and the
+                           // arrows off the left edge); it's cut at the edge, and its tooltip shows it whole.
+                           WS_CHILD | WS_VISIBLE | WS_TABSTOP | TVS_HASBUTTONS | TVS_LINESATROOT |
+                               TVS_SHOWSELALWAYS | TVS_FULLROWSELECT | TVS_TRACKSELECT | TVS_SINGLEEXPAND |
+                               TVS_NOHSCROLL,
                            0, 0, 0, 0, hwnd(), reinterpret_cast<HMENU>(static_cast<INT_PTR>(kNavId)), inst_, nullptr);
     if (nav_) {
         SetWindowTheme(nav_, L"Explorer", nullptr);
-        TreeView_SetExtendedStyle(nav_, TVS_EX_DOUBLEBUFFER | TVS_EX_FADEINOUTEXPANDOS,
-                                  TVS_EX_DOUBLEBUFFER | TVS_EX_FADEINOUTEXPANDOS);
+        TreeView_SetExtendedStyle(nav_, TVS_EX_DOUBLEBUFFER, TVS_EX_DOUBLEBUFFER);
     }
     tabs_ = CreateWindowExW(0, WC_TABCONTROLW, L"Pages", WS_CHILD | WS_CLIPSIBLINGS | TCS_FOCUSNEVER | TCS_TABS,
                             0, 0, 0, 0, hwnd(), reinterpret_cast<HMENU>(static_cast<INT_PTR>(kTabsId)), inst_, nullptr);
@@ -197,15 +298,61 @@ void Workspace::ClearNavigation()
     if (nav_) TreeView_DeleteAllItems(nav_);
 }
 
-HTREEITEM Workspace::AddNavItem(HTREEITEM parent, const std::wstring& text, WORD id, bool expanded)
+void Workspace::BuildNavImages()
+{
+    if (!nav_) return;
+    const int px = scaled(kNavIcon96);
+    HIMAGELIST images = ImageList_Create(px, px, ILC_COLOR32 | ILC_MASK, static_cast<int>(navGlyphs_.size()) + 8, 8);
+    if (!images) return;
+    HFONT font = iconFont(px);
+    for (const NavIcon& g : navGlyphs_) {
+        HICON icon = font ? glyphIcon(font, g.glyph, px, navIconColor(g.group)) : nullptr;
+        if (icon) {
+            ImageList_AddIcon(images, icon);
+            DestroyIcon(icon);
+        } else {
+            HICON blank = CreateIcon(nullptr, 1, 1, 1, 32, nullptr, nullptr);
+            ImageList_AddIcon(images, blank);   // keeps the indexes in step
+            if (blank) DestroyIcon(blank);
+        }
+    }
+    if (font) DeleteObject(font);
+    TreeView_SetImageList(nav_, images, TVSIL_NORMAL);
+    if (navImages_) ImageList_Destroy(navImages_);
+    navImages_ = images;
+}
+
+int Workspace::navImage(wchar_t glyph, bool group)
+{
+    for (size_t i = 0; i < navGlyphs_.size(); ++i)
+        if (navGlyphs_[i].glyph == glyph && navGlyphs_[i].group == group) return static_cast<int>(i);
+    navGlyphs_.push_back({glyph, group});
+    const int px = scaled(kNavIcon96);
+    if (!navImages_) {
+        BuildNavImages();
+    } else if (HFONT font = iconFont(px)) {
+        HICON icon = glyphIcon(font, glyph, px, navIconColor(group));
+        DeleteObject(font);
+        if (icon) {
+            ImageList_AddIcon(navImages_, icon);
+            DestroyIcon(icon);
+        }
+    }
+    const int index = static_cast<int>(navGlyphs_.size()) - 1;
+    return navImages_ && index < ImageList_GetImageCount(navImages_) ? index : I_IMAGENONE;
+}
+
+HTREEITEM Workspace::AddNavItem(HTREEITEM parent, const std::wstring& text, WORD id, bool expanded, wchar_t glyph,
+                                size_t dimFrom)
 {
     if (!nav_) return nullptr;
     TVINSERTSTRUCTW ins{};
     ins.hParent = parent;
     ins.hInsertAfter = TVI_LAST;
-    ins.item.mask = TVIF_TEXT | TVIF_PARAM | TVIF_STATE;
+    ins.item.mask = TVIF_TEXT | TVIF_PARAM | TVIF_STATE | TVIF_IMAGE | TVIF_SELECTEDIMAGE;
+    ins.item.iImage = ins.item.iSelectedImage = glyph ? navImage(glyph, id == 0) : I_IMAGENONE;
     ins.item.pszText = const_cast<wchar_t*>(text.c_str());
-    ins.item.lParam = id;
+    ins.item.lParam = navParam(id, dimFrom);
     ins.item.stateMask = TVIS_EXPANDED | TVIS_BOLD;
     ins.item.state = (expanded ? TVIS_EXPANDED : 0) | (parent == TVI_ROOT ? TVIS_BOLD : 0);
     return reinterpret_cast<HTREEITEM>(SendMessageW(nav_, TVM_INSERTITEMW, 0, reinterpret_cast<LPARAM>(&ins)));
@@ -214,6 +361,33 @@ HTREEITEM Workspace::AddNavItem(HTREEITEM parent, const std::wstring& text, WORD
 void Workspace::RefreshNavigation()
 {
     if (nav_) InvalidateRect(nav_, nullptr, TRUE);
+}
+
+HTREEITEM Workspace::findNavItem(HTREEITEM from, WORD id) const
+{
+    for (HTREEITEM h = from; h; h = TreeView_GetNextSibling(nav_, h)) {
+        TVITEMW tv{};
+        tv.mask = TVIF_PARAM;
+        tv.hItem = h;
+        if (TreeView_GetItem(nav_, &tv) && static_cast<WORD>(tv.lParam) == id) return h;
+        if (HTREEITEM child = TreeView_GetChild(nav_, h))
+            if (HTREEITEM found = findNavItem(child, id)) return found;
+    }
+    return nullptr;
+}
+
+// nav-state-active: the tree shows where you are, however the page was reached (the menu,
+// the toolbar, Ctrl+K, the home page, a tab). A page with no command (a report's preview,
+// say) has no row: nothing is selected.
+void Workspace::SyncNavigation(HWND page)
+{
+    if (!nav_ || destroying_) return;
+    WORD id = 0;
+    if (auto* p = dynamic_cast<HostedPage*>(Window::FromHandle(page))) id = p->commandId;
+    HTREEITEM item = id ? findNavItem(TreeView_GetRoot(nav_), id) : nullptr;
+    if (TreeView_GetSelection(nav_) == item) return;
+    TreeView_SelectItem(nav_, item);   // opens its group (TVS_SINGLEEXPAND) and scrolls it into view
+    if (item) TreeView_EnsureVisible(nav_, item);
 }
 
 void Workspace::RunNavItem(HTREEITEM item)
@@ -240,12 +414,62 @@ LRESULT Workspace::NavCustomDraw(NMTVCUSTOMDRAW* cd) const
     switch (cd->nmcd.dwDrawStage) {
     case CDDS_PREPAINT: return CDRF_NOTIFYITEMDRAW;
     case CDDS_ITEMPREPAINT: {
-        const WORD id = static_cast<WORD>(cd->nmcd.lItemlParam);
-        if (id && !IsCommandEnabled(id)) cd->clrText = GetSysColor(COLOR_GRAYTEXT);
-        return CDRF_DODEFAULT;
+        const WORD id = LOWORD(cd->nmcd.lItemlParam);
+        const bool disabled = id && !IsCommandEnabled(id);
+        if (disabled) cd->clrText = GetSysColor(COLOR_GRAYTEXT);
+        LRESULT r = CDRF_DODEFAULT;
+        // A sub-group (a group below the top) is semibold: the levels differ by weight, not colour only.
+        const auto item = reinterpret_cast<HTREEITEM>(cd->nmcd.dwItemSpec);
+        if (!id && navGroupFont_ && TreeView_GetParent(nav_, item)) {
+            SelectObject(cd->nmcd.hdc, navGroupFont_);
+            r |= CDRF_NEWFONT;
+        }
+        // A dimmed suffix is drawn over the row once it's painted; not on a highlighted row,
+        // whose themed background can't be repainted flat.
+        if (HIWORD(cd->nmcd.lItemlParam) && !disabled && !(cd->nmcd.uItemState & (CDIS_SELECTED | CDIS_HOT)))
+            r |= CDRF_NOTIFYPOSTPAINT;
+        return r;
     }
+    case CDDS_ITEMPOSTPAINT:
+        DrawDimSuffix(cd);
+        return CDRF_DODEFAULT;
     default: return CDRF_DODEFAULT;
     }
+}
+
+// Paints the row's text again, its suffix (" (classic)") in the grey of unavailable text.
+void Workspace::DrawDimSuffix(const NMTVCUSTOMDRAW* cd) const
+{
+    const auto item = reinterpret_cast<HTREEITEM>(cd->nmcd.dwItemSpec);
+    const size_t from = HIWORD(cd->nmcd.lItemlParam) - 1u;
+    wchar_t text[256] = {};
+    TVITEMW tv{};
+    tv.mask = TVIF_TEXT;
+    tv.hItem = item;
+    tv.pszText = text;
+    tv.cchTextMax = static_cast<int>(std::size(text));
+    RECT rc{};
+    if (!TreeView_GetItem(nav_, &tv) || !TreeView_GetItemRect(nav_, item, &rc, TRUE)) return;
+    const size_t len = wcslen(text);
+    if (from >= len) return;
+    HDC dc = cd->nmcd.hdc;
+    const COLORREF bk = TreeView_GetBkColor(nav_);
+    HBRUSH brush = CreateSolidBrush(bk == static_cast<COLORREF>(-1) ? GetSysColor(COLOR_WINDOW) : bk);
+    FillRect(dc, &rc, brush);
+    DeleteObject(brush);
+    SetBkMode(dc, TRANSPARENT);
+    // The tree draws its text the width of a window edge (SM_CXEDGE) in from the text
+    // rect's left edge; this matches it, so the row lines up with its neighbours.
+    RECT r = rc;
+    r.left += GetSystemMetricsForDpi(SM_CXEDGE, GetDpiForWindow(nav_));
+    const UINT fmt = DT_SINGLELINE | DT_VCENTER | DT_NOPREFIX | DT_LEFT;
+    SetTextColor(dc, GetSysColor(COLOR_WINDOWTEXT));
+    DrawTextW(dc, text, static_cast<int>(from), &r, fmt);
+    SIZE head{};
+    GetTextExtentPoint32W(dc, text, static_cast<int>(from), &head);
+    r.left += head.cx;
+    SetTextColor(dc, GetSysColor(COLOR_GRAYTEXT));
+    DrawTextW(dc, text + from, static_cast<int>(len - from), &r, fmt);
 }
 
 // ---- pages ---------------------------------------------------------------------------
@@ -295,6 +519,7 @@ void Workspace::ActivatePage(HWND page)
         TabCtrl_SetCurSel(tabs_, i);
         OnPageActivate(page);
     }
+    SyncNavigation(page);
     SetFocus(page);
 }
 
@@ -510,11 +735,24 @@ bool Workspace::OnMessage(UINT msg, WPARAM wp, LPARAM lp, LRESULT& result)
                 GetCursorPos(&hit.pt);
                 ScreenToClient(nav_, &hit.pt);
                 HTREEITEM item = TreeView_HitTest(nav_, &hit);
-                if (item && (hit.flags & (TVHT_ONITEM | TVHT_ONITEMRIGHT | TVHT_ONITEMINDENT))) {
-                    TreeView_SelectItem(nav_, item);
-                    RunNavItem(item);
-                }
                 result = 0;
+                if (item && (hit.flags & (TVHT_ONITEM | TVHT_ONITEMRIGHT | TVHT_ONITEMINDENT))) {
+                    const bool wasSelected = TreeView_GetSelection(nav_) == item;
+                    TVITEMW tv{};
+                    tv.mask = TVIF_PARAM;
+                    tv.hItem = item;
+                    const bool group = TreeView_GetItem(nav_, &tv) && LOWORD(tv.lParam) == 0;
+                    TreeView_SelectItem(nav_, item);
+                    if (group) {
+                        // TVS_SINGLEEXPAND opens a group as it's selected (closing the others); a click
+                        // on the group already selected opens or closes it. Toggling after the select
+                        // closed it again, so the groups never seemed to open.
+                        TreeView_Expand(nav_, item, wasSelected ? TVE_TOGGLE : TVE_EXPAND);
+                    } else {
+                        RunNavItem(item);
+                    }
+                    result = 1;   // handled: the tree's own click handling would toggle it once more
+                }
                 return true;
             }
             case NM_RETURN:
@@ -556,6 +794,17 @@ bool Workspace::OnMessage(UINT msg, WPARAM wp, LPARAM lp, LRESULT& result)
         return false;
     case WM_DPICHANGED_AFTERPARENT:
         return false;
+    case WM_SYSCOLORCHANGE:     // the colours, high contrast or the theme changed: the icons follow
+    case WM_THEMECHANGED:
+    case WM_SETTINGCHANGE:
+        if (nav_) {
+            if (msg == WM_SYSCOLORCHANGE) SendMessageW(nav_, WM_SYSCOLORCHANGE, wp, lp);   // a common control needs it passed on
+            if (msg != WM_SETTINGCHANGE || wp == SPI_SETHIGHCONTRAST || wp == 0) {
+                if (navImages_) BuildNavImages();
+                InvalidateRect(nav_, nullptr, TRUE);
+            }
+        }
+        return false;   // the subclass and DefWindowProc see it too
     default: return false;
     }
 }
@@ -571,6 +820,7 @@ LRESULT Workspace::DefaultProc(UINT msg, WPARAM wp, LPARAM lp)
     if (msg == WM_DPICHANGED) {   // per-monitor v2: moved to a monitor with another scaling
         OnDpiChanged(HIWORD(wp));
         SetUiFont();
+        if (navImages_) BuildNavImages();
         const RECT* r = reinterpret_cast<const RECT*>(lp);
         SetWindowPos(hwnd(), nullptr, r->left, r->top, r->right - r->left, r->bottom - r->top,
                      SWP_NOZORDER | SWP_NOACTIVATE);

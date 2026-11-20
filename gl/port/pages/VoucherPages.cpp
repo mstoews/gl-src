@@ -24,6 +24,8 @@
 #include "../Globals.h"
 #include "../Ini.h"
 #include "../PortIds.h"
+#include "../reports/RunReport.h"        // G7: the slip's preview
+#include "../reports/VoucherReports.h"   // VoucherSlip
 #include "GlVoucherModel.h"
 #include "SubledgerModels.h"
 #include "TaskModels.h"   // data_group
@@ -139,7 +141,8 @@ std::vector<std::pair<int, unsigned>> with(std::vector<std::pair<int, unsigned>>
 }
 
 const std::vector<std::pair<int, unsigned>> kGlAnchors = with({
-    {IDC_VP_PREV, m::kTopLeft}, {IDC_VP_NEXT, m::kTopLeft}, {IDC_GLV_DATE, m::kTopLeft}, {IDC_GLV_PERIOD, m::kTopLeft},
+    {IDC_VP_PREV, m::kTopLeft}, {IDC_VP_NEXT, m::kTopLeft}, {IDC_VP_PRINT, m::kTopLeft}, {IDC_GLV_DATE, m::kTopLeft},
+    {IDC_GLV_PERIOD, m::kTopLeft},
     {IDC_GLV_CHEQUE, m::kTopLeft}, {IDC_GLV_DESC, m::kTopLeft}, {IDC_VP_GRID, m::kAll},
 });
 
@@ -171,6 +174,7 @@ const std::vector<std::pair<int, unsigned>> kReceiptsAnchors = {
     {IDC_RCP_GROUP, m::kTopLeft},   {IDC_RCP_WHO, m::kTopLeft},    {IDC_RCP_WHAT, m::kTopLeft},
     {IDC_RCP_DATE, m::kTopLeft},    {IDC_RCP_BANK, m::kTopLeft},   {IDC_RCP_AMOUNT, m::kTopLeft},
     {IDC_RCP_DISCOUNT, m::kTopLeft}, {IDC_RCP_REF, m::kTopLeft},   {IDC_RCP_RECORD, m::kTopLeft},
+    {IDC_RCP_REVERSE, m::kTopLeft},
 };
 
 const std::vector<std::pair<int, unsigned>> kListAnchors = {
@@ -194,8 +198,45 @@ protected:
     virtual void UpdateTotals() = 0;
     virtual int ControlOf(const std::string& field) const = 0;
 
+    ~EntryPage() override
+    {
+        if (totalFont_) DeleteObject(totalFont_);
+    }
+
+    // The figure the voucher turns on (Difference, Payable or Total) and its label, semibold
+    // (ui-ux-pro-max visual-hierarchy, weight-hierarchy): the form's font at a heavier weight.
+    void EmphasiseTotal()
+    {
+        HWND ref = Item(IDC_VP_LDEBIT);
+        HFONT base = ref ? reinterpret_cast<HFONT>(SendMessageW(ref, WM_GETFONT, 0, 0)) : nullptr;
+        LOGFONTW lf{};
+        if (!base || !GetObjectW(base, sizeof lf, &lf)) return;
+        lf.lfWeight = FW_SEMIBOLD;
+        HFONT font = CreateFontIndirectW(&lf);
+        if (!font) return;
+        for (int id : {IDC_VP_LDIFF, IDC_VP_DIFF})
+            if (HWND h = Item(id)) SendMessageW(h, WM_SETFONT, reinterpret_cast<WPARAM>(font), TRUE);
+        if (totalFont_) DeleteObject(totalFont_);
+        totalFont_ = font;
+    }
+
+    // At a new scaling the form's own fonts change after the page hears of it: the semibold
+    // copy is made again once they have (a posted message).
+    bool OnMessage(UINT msg, WPARAM wp, LPARAM lp, LRESULT& result) override
+    {
+        if (msg == kEmphasiseTotal) {
+            EmphasiseTotal();
+            result = 0;
+            return true;
+        }
+        const bool handled = fx::Page::OnMessage(msg, wp, lp, result);
+        if (msg == WM_DPICHANGED_AFTERPARENT) PostMessageW(hwnd(), kEmphasiseTotal, 0, 0);
+        return handled;
+    }
+
     void AttachGrid(m::EntryGridModel& g)
     {
+        EmphasiseTotal();
         grid_.Attach(Item(IDC_VP_GRID), &g);
         g.OnChanged = [this] {
             if (loading_) return;
@@ -307,6 +348,10 @@ protected:
 
     fx::EntryGrid grid_;
     bool loading_ = false;
+
+private:
+    static constexpr UINT kEmphasiseTotal = WM_APP + 80;   // the semibold total, made again after a DPI change
+    HFONT totalFont_ = nullptr;
 };
 
 // ---- General Ledger voucher -----------------------------------------------------------
@@ -475,9 +520,25 @@ protected:
             case IDC_VP_POST: Post(); return true;
             case IDC_VP_PREV: Move(-1); return true;
             case IDC_VP_NEXT: Move(1); return true;
+            case IDC_VP_PRINT: PrintSlip(); return true;
             default: break;
             }
         return EntryPage::OnFormCommand(id, code, ctl);
+    }
+
+    // G7 (Voucher Entry's Print, spec #3 D7): the saved voucher's slip, previewed in a tab.
+    void PrintSlip()
+    {
+        if (model_.isNew()) {
+            ShowInfo(fx::InfoKind::Information, L"Save the voucher first, then print its slip.");
+            return;
+        }
+        if (IsDirty()) {
+            ShowInfo(fx::InfoKind::Information, L"The slip prints the voucher as saved: save the changes first.");
+            return;
+        }
+        const long n = model_.number;
+        RunReport(*host(), {}, [n](const ReportContext& ctx) { return VoucherSlip(cb, ctx, n); });
     }
 
     bool OnShortcut(const MSG& msg) override
@@ -1108,6 +1169,10 @@ protected:
             Record();
             return true;
         }
+        if (code == BN_CLICKED && id == IDC_RCP_REVERSE) {
+            Reverse();
+            return true;
+        }
         if (code == EN_CHANGE) return true;   // the receipt's fields aren't a record to save: never dirty
         return false;
     }
@@ -1190,6 +1255,32 @@ private:
         SetText(IDC_RCP_AMOUNT, s && s->item.remainder ? m::FormatAmount(s->item.remainder) : std::string());
         SetChecked(IDC_RCP_DISCOUNT, false);
         EnableWindow(Item(IDC_RCP_RECORD), s && s->item.remainder > 0);
+        EnableWindow(Item(IDC_RCP_REVERSE), model_.HasReceipt());
+    }
+
+    // G9: the latest receipt undone, after asking (D10).
+    void Reverse()
+    {
+        const ReceiptItem* s = model_.selected();
+        if (!s || !model_.HasReceipt()) return;
+        enum { kReverse = 101 };
+        if (fx::Ask(host() ? host()->hostWindow() : hwnd(), szApp,
+                    L"Reverse the latest receipt on invoice " + wide(TrimText(s->item.invoiceNo)) + L"?",
+                    L"What it received is owed again. If its journal has been transferred to the GL, it's reversed there on the date shown.",
+                    {{kReverse, L"Reverse receipt"}, {IDCANCEL, L"Keep it"}}, IDCANCEL, IDCANCEL) != kReverse)
+            return;
+        model_.date = fx::GetDateField(Item(IDC_RCP_DATE));
+        const EntryResult r = model_.Reverse();
+        if (!r.ok) {
+            if (r.field == "date") MarkField(IDC_RCP_DATE, r.message, true);
+            ShowInfo(fx::InfoKind::Error, wide(r.message));
+            return;
+        }
+        ClearMarks();
+        ShowList();
+        ShowSelected();
+        ShowInfo(fx::InfoKind::Success, wide(r.message));
+        NotifyDataChanged(data_group::kAr, hwnd());
     }
 
     void Record()

@@ -73,6 +73,9 @@ MENUS = ['MANILA', 'GLE', 'GLSUB', 'MEMO']
 MENU_EDITS = [
     # Spec #3 D13 (S3-M3): Financial Statements runs F3, F4 and F5.
     ('MANILA', 'rename', '1018', '"&Cash flow statement..."'),
+    # Spec #8 design review (S8-M7): the menu's typo, and a doubled space.
+    ('MANILA', 'rename', '4045', '"&Purchase Vendors..."', '"&Purchase Venders..."'),
+    ('MANILA', 'rename', '3054', '"&General Ledger Voucher..."', '"&General Ledger  Voucher..."'),
     ('MANILA', 'remove', '1025'),
     # Spec #3 D9 (S3-M7): Custom Report always opens the report list; File >
     # Print and the toolbar keep 3068, which prints the active preview first.

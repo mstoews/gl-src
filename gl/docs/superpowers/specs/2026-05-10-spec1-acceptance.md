@@ -180,6 +180,35 @@ Known deviation: the spec says "a 30-line example program in `win32fx/examples/t
 | G4 | The User Access Menu button and the Cash Accounts grid list (1034) are not available. | They need the grid control. | As G3. |
 | G5 | No Spec #1 dialog contains a `tbInteger`, so #8 tests it in `trivial_dialog.exe`. | No Spec #1 screen uses one. | None needed. |
 
+## Redesign (Spec #8)
+
+The figures and checks above stay as they are. Spec #8 (`2026-11-19-owl-to-win32-sdk-port-spec8-design.md`, §15 criterion 2) made the Chart of Accounts a page in the main window; this table says where each step that uses it is done in the redesigned program. Until Spec #8's acceptance the old dialog is still reachable as "Chart of Accounts (classic)" in the navigation pane, so each step can be done either way.
+
+| Criterion and step | Where it's done now | What differs |
+|---|---|---|
+| 2. Accounts > Chart of Accounts opens dialog 1010 with the list beside it | Chart of Accounts page | One page: the list is on the left, the fields on the right. There is no separate list window and no "Add" caption. |
+| 2. The list shows the accounts in account + dept order | Chart of Accounts page, the list | None. |
+| 2. Double-click a row, or select one and press Enter | Chart of Accounts page, the list | Selecting a row fills the fields. The list stays visible. |
+| 2. Type `22` in Account and click Search | Chart of Accounts page, the filter box above the list | There is no Search button: typing `22` in the filter box narrows the list as you type. |
+| 2. Type `2210` / `2500` and click Set Data | Chart of Accounts (classic) | The page has no Set Data. |
+| 2. GLSUB > Add Accounts opens the same dialog | GLSUB > Add Accounts | It opens the Chart of Accounts page. |
+| 3. Add 150000 with no type, then with Balance Sheet | Chart of Accounts page: New, fill in, Save | The missing type marks the field and shows in the information bar, not a message box. Save, not Add/Mod. |
+| 3. Add 350000 as a second retained earnings account | Chart of Accounts page | The refusal shows in the information bar. |
+| 3. Leave Account blank and click Add/Mod | Chart of Accounts page | The blank field is marked as required and the information bar says why. |
+| 4. Pick 150000, change its description and opening balance | Chart of Accounts page: select it, edit, Save | Save, not Add/Mod. The account number can't be changed once saved. |
+| 5. Delete 150000, answer No, then Yes | Chart of Accounts page, Delete | The question is a task dialog with named buttons ("Delete account" / "Keep it") instead of Yes / No. |
+| 5. Delete 102101 (has a balance) | Chart of Accounts page, Delete | The refusal shows in the information bar. |
+| 5. Delete an account that doesn't exist (`999999`) | Chart of Accounts (classic), or GLSUB > Delete Accounts | The page deletes only the selected saved account (Delete is unavailable for a new one), so there is no "not found" case. |
+| 6. Add 150001 and change 101000's description | Chart of Accounts page | Save, not Add/Mod. |
+| 6. After restarting, 150001, 101000, 150000 and 144910 are as left | Chart of Accounts page, the list | None. |
+| 7. The list's columns and order | Chart of Accounts page, the list | None. |
+| 7. Selecting a row fills the fields and hides the list | Chart of Accounts page, the list | The list stays visible. |
+| 7. Click a row, then type `41` | Chart of Accounts page, the filter box | Typing `41` in the filter box narrows the list to the 410001 rows; it doesn't jump the selection. |
+| 7. Right-click the list for List Window Parameters | Chart of Accounts (classic) | The page's list has no query. |
+| 7. Move and resize the list, then reopen | Chart of Accounts (classic) | The page's list is part of the page and isn't saved to `GL.INI`. |
+| 7. Close the list with its X, then click Search | Chart of Accounts (classic) | The page's list can't be closed. |
+| 8. The rows on dialog 1010 (Account, Current balance) | Chart of Accounts (classic) | They test the `tbPic` and `tbFloat` controls, which the classic dialog still uses. The 1021 and `trivial_dialog.exe` rows are unchanged. |
+
 ## Gaps and triage
 
 Add one row for each `FAIL` or unexpected behaviour found during the walkthrough.

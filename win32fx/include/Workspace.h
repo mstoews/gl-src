@@ -64,8 +64,15 @@ public:
     // ---- the navigation pane ----
     HWND navigation() const noexcept { return nav_; }
     void ClearNavigation();
-    // An item under `parent` (TVI_ROOT for the top). id 0: a group.
-    HTREEITEM AddNavItem(HTREEITEM parent, const std::wstring& text, WORD id, bool expanded = false);
+    // An item under `parent` (TVI_ROOT for the top). id 0: a group. `glyph` is
+    // its icon, a character of the system icon font (Segoe Fluent Icons, or
+    // Segoe MDL2 Assets before Windows 11); 0: none. A group's icon is drawn in
+    // the system's link colour, a command's in the text colour (both in the text
+    // colour under high contrast). A top-level group is bold, a sub-group
+    // semibold. `dimFrom`: the text from that offset on (" (classic)", say) is
+    // drawn in the grey of unavailable text; npos: none.
+    HTREEITEM AddNavItem(HTREEITEM parent, const std::wstring& text, WORD id, bool expanded = false,
+                         wchar_t glyph = 0, size_t dimFrom = std::wstring::npos);
     void SetNavigationVisible(bool visible);
     bool navigationVisible() const noexcept { return navVisible_; }
     // Redraw the pane (after the rights change, say).
@@ -133,6 +140,20 @@ private:
     LRESULT NavCustomDraw(NMTVCUSTOMDRAW* cd) const;
     void SetUiFont();
     int scaled(int px96) const;
+    // The navigation icons: built again at a new DPI and when the colours or the theme change.
+    int navImage(wchar_t glyph, bool group);
+    void BuildNavImages();
+    // Selects the row of `page`'s command (and opens its group); none if it has no row.
+    void SyncNavigation(HWND page);
+    HTREEITEM findNavItem(HTREEITEM from, WORD id) const;
+    void DrawDimSuffix(const NMTVCUSTOMDRAW* cd) const;
+    HFONT navGroupFont_ = nullptr;   // semibold: the sub-groups
+    struct NavIcon {
+        wchar_t glyph;
+        bool group;
+    };
+    HIMAGELIST navImages_ = nullptr;
+    std::vector<NavIcon> navGlyphs_;   // navGlyphs_[i] is image i
 
     HINSTANCE inst_ = nullptr;
     HWND nav_ = nullptr;

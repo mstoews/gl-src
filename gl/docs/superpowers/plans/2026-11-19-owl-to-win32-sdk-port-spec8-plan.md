@@ -2,7 +2,7 @@
 
 **Spec reference:** `gl/docs/superpowers/specs/2026-11-19-owl-to-win32-sdk-port-spec8-design.md`
 **Date:** 2026-11-19
-**Plan status:** In progress (S8-M0 to M6 built; M6's removals wait for the acceptance)
+**Plan status:** Built (S8-M0 to M7); waiting for the acceptance walkthrough and sign-off (M7 task 2), then M6's removals
 
 **Paths:** relative to the repository root. The shell today is `gl/port/ManilaGL.{h,cpp}` on `win32fx/include/MdiFrame.h`, with the menu, toolbar and status bar from `gl/res/gl.rc` (made by `gl/res/tools/prune_rc.py`) and `win32fx/include/Toolbar.h` / `StatusBar.h`. Screens are `MainDialog` subclasses in `gl/port/`. New framework code goes in `win32fx/` (`Workspace`, `Page`, `Layout`, the controls), the command table in `gl/port/Commands.{h,cpp}`, pages in `gl/port/pages/`, and page templates in `gl/res/port.rc` with their IDs in `gl/port/PortIds.h`.
 
@@ -694,6 +694,49 @@ S is less than a day, M is 1–3 days, L is 3–6 days. **Parallel work:** M2, M
 ---
 
 ## Milestone 7 — Acceptance
+
+> **As built (2026-11-19).** Task 1 is done; task 2 is the finance team's.
+> - **The sheet:** `gl/docs/superpowers/specs/2026-11-19-spec8-acceptance.md`, in the Spec #7 sheet's shape: run details, P1 to P3 (`/checkaccess` and `/screenshots` added to P2), the fixture, spec §15's eleven criteria, gaps and triage, and sign-off.
+> - **Known gaps (G1 to G9):**
+>   - the options panels and the designer as a page (M5);
+>   - the gallery's missing Export and Import of report definitions;
+>   - the screens that are still dialogs;
+>   - M6's removals, waiting for sign-off;
+>   - no progress within a one-transaction task;
+>   - the 150% set by hand;
+>   - no Print on the GL voucher page, and File > Print with no preview still opening the old list;
+>   - the Create Cheques task can't choose the pay date or the bank, and the receipts page can't reverse a receipt.
+> - **The redesign notes:** the Spec #1 to #7 sheets each have a "Redesign (Spec #8)" section before their gaps, a table of each step whose screen moved and where it's done now. Their figures and checks are unchanged (the sections only add lines). Messages that read differently on the pages are quoted.
+> - **The figures:** `gl_tests/test_acceptance8.cpp` ("The Spec #8 acceptance walkthrough's figures") runs the sheet's moved steps in order on one fixture copy, through the page models, and checks every figure the sheet quotes:
+>   - the home page's before and after;
+>   - C004 saved and changed with no question;
+>   - voucher 104 typed through the grid's keys, saved and posted (5 `gl_dist` rows);
+>   - the refused account and closed period;
+>   - Post GL vouchers posting 2, with 102 unchecked ("Out of balance by 10.00.");
+>   - sales voucher 7 and its 1,000.00 receipt;
+>   - Update AR and AP making GL vouchers 105 and 106.
+>
+>   `gl_tests` 216.
+> - **Gaps fixed after the sheet (G2, G8, G9):**
+>   - G2: the gallery has **Export...** and **Import...**. They are the report list's code, made free functions (`ExportReportDefinition`, `ImportReportDefinition` in `reports/ReportList.h`); Import is greyed without the Report Writer right, Export works on a user report only.
+>   - G8: the task form has a second row, Create Cheques' "Pay on:", "Bank:" (each bank's account shown) and "First cheque:", filled as the classic screen fills them; other tasks hide it and the list takes its room. Create Cheques now lists every open invoice with check boxes (`TaskModel::Checks`): checked is paid, unchecked is held (H); a held or not-yet-due invoice that's checked is released (O) or forced (F), as TAPHoldForce does. A refused run puts the controls back.
+>   - G9: the receipts page's **Reverse last receipt** (`ReceiptsModel::Reverse`, ReverseReceipt) asks first and dates the reversal by the page's Date.
+>   - `gl_tests/test_gaps8.cpp` (4 cases); `gl_tests` 220. The Spec #5, #6 and #7 redesign tables and the Spec #8 gap triage are updated.
+> - **G1, M5's deferred tasks 3 and 5:**
+>   - **Options panels:** the three options dialogs became child panels in a row (`IDD_PNL_SAMPLE`, `IDD_PNL_TB`, `IDD_PNL_STMT`, the same control IDs), and a user report's questions became `IDD_PNL_RW_PROMPT`.
+>   - **The preview hosts them:** `rpt::win32::OptionsPanel` sits between the strip and the page, and the strip's **Options...** becomes **Refresh**; Enter in the panel refreshes too.
+>   - **Opening:** `RunReportWithPanel` builds at once from the session's options. A user report that asks opens empty the first time ("Answer the report's questions above, then Refresh.") and builds from its last answers after that.
+>   - **The designer page** (`OpenReportDesigner`, `IDD_PG_RW_DESIGN`): the gallery's New, Modify and Copy open it.
+>     - The designer's own form (`IDD_PNL_RW_DESIGN`) is on the left; an embedded preview (`CreatePreviewChild` / `SetPreviewReport`) is on the right and is rebuilt 600 ms after the last change.
+>     - Preview asks a report's questions; Save and Ctrl+S save; closing the tab asks to save; Esc doesn't close it.
+>     - A saved report tells the gallery (data group `kReports`), which lists it again.
+>   - **Classic:** Custom Report (classic) keeps the modal designer and questions.
+> - **G7:**
+>   - **Print slip** (`IDC_VP_PRINT`) on the GL voucher page shows the saved voucher's slip (`VoucherSlip`) in a preview tab, as Voucher Entry's Print did (spec #3 D7). A new or changed voucher is refused on the information bar.
+>   - File > Print and the toolbar's Print button with no preview active open the report gallery; dialog 1022 stays as Custom Report (classic).
+>   - Driven on a scratch copy: Print slip on a new voucher is refused; on voucher 102 it opens "General Ledger Batch Entry Slip" in a tab; File > Print with no preview opens the gallery. Debug and Release `/checkres`, `/checkaccess` and `/stress` 0; `gl_tests` 220.
+>   - **Checks:** `/stress` opens, refreshes and closes each options panel; `/checkres` loads the new templates. Driven on a scratch copy: F1, F2 (its refusal), F3, F4 and *GL lines by account*; and the designer page (a retitle followed in the preview, Save, Esc, Close asking to save, New).
+> - **Still to do (task 2):** the Release build check on the test machine, the walkthrough with a witness, triage of what it finds, and sign-off. Then M6 task 4 removes the classic screens.
 
 1. **`gl/docs/superpowers/specs/2026-11-19-spec8-acceptance.md`**, in the Spec #7 sheet's shape, with spec §15's checks. Each of the Spec #1–#7 sheets gets a "redesign" column for the steps whose screens moved, saying where the step is now done; the expected figures don't change. A `gl_tests` case runs the moved steps through the page models and checks every figure.
 2. Release build check, the finance team's walkthrough with a witness, triage, sign-off.

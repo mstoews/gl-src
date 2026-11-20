@@ -149,8 +149,15 @@ public:
 
     EntryResult Record();
 
+    // Spec #8 G9 (the classic screen's Reverse, D10): the selected invoice's
+    // latest receipt undone. `date` dates the reversing rows when its journal
+    // has been transferred. HasReceipt: there is one to reverse.
+    bool HasReceipt() const noexcept { return selected_ && selected_->item.received > 0; }
+    EntryResult Reverse();
+
 private:
     cb4sqlite::Code4& code_;
+    bool all_ = false;   // Load's: the settled invoices too
     std::vector<ReceiptItem> items_;
     std::vector<ApBank> banks_;
     std::optional<ReceiptItem> selected_;

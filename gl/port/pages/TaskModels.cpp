@@ -416,51 +416,116 @@ public:
 
 class CreateChequesTask : public TaskModel {
 public:
-    explicit CreateChequesTask(std::string payDate) : payDate_(std::move(payDate)) {}
+    explicit CreateChequesTask(std::string payDate) { payment.payDate = std::move(payDate); }
     std::string Title() const override { return "Create cheques"; }
     std::string Action() const override { return "Create cheques"; }
     bool PerItem() const override { return false; }
+    bool Checks() const override { return true; }
     unsigned Groups() const override { return data_group::kAp | data_group::kReports; }
     TaskOption Option() const override { return TaskOption::Date; }
     std::string OptionLabel() const override { return "Due by:"; }
+    bool HasPaymentOptions() const override { return true; }
+    PaymentOptions DefaultPaymentOptions(cb4sqlite::Code4& code) const override
+    {
+        PaymentOptions o;
+        o.payDate = payment.payDate;
+        for (const ApBank& b : LoadApAccounts(code).banks)
+            o.banks.push_back({TrimText(b.shortName), TrimText(b.shortName) + "  " + TrimText(b.name) + "  (" + TrimText(b.account.account) +
+                                                          (TrimText(b.account.dept).empty() ? "" : "-" + TrimText(b.account.dept)) + ")"});
+        if (!o.banks.empty()) o.bank = o.banks.front().first;
+        o.firstNumber = NextChequeNumber(code);
+        return o;
+    }
     std::vector<std::pair<std::string, int>> Columns() const override { return {{"Voucher", 64}, {"Vendor and invoice", 220}, {"Due", 80}, {"Owed", 100}}; }
     std::string Noun(int n) const override { return n == 1 ? "invoice" : "invoices"; }
     std::vector<TaskRow> Load(cb4sqlite::Code4& code) override
     {
         std::vector<TaskRow> rows;
-        for (const PaymentItem& p : PaymentItems(code, option)) {
-            TaskRow r{p.item.batchno, {std::to_string(p.item.batchno), p.vendorName + ", " + TrimText(p.item.invoiceNo), dateText(p.item.dueDate), money(p.owed)}, true, false, ""};
+        listed_.clear();
+        for (const PaymentItem& p : PaymentItems(code, option, true)) {
             const std::string ctl = TrimText(p.item.paymentCtl);
-            if (ctl == ap_payment::kHeld) {
-                r.checked = false;
-                r.note = "Held: release it in Create Cheques (classic).";
-            }
+            if (ctl != ap_payment::kHeld && ctl != ap_payment::kOpen && ctl != ap_payment::kForced) continue;   // paid
+            const bool due = TrimText(p.item.dueDate) <= TrimText(option);   // as PaymentItems: a blank date is due
+            TaskRow r{p.item.batchno, {std::to_string(p.item.batchno), p.vendorName + ", " + TrimText(p.item.invoiceNo), dateText(p.item.dueDate), money(p.owed)}};
+            r.checked = ctl == ap_payment::kForced || (ctl == ap_payment::kOpen && due);
+            if (ctl == ap_payment::kHeld) r.note = "Held: check it to pay it.";
+            else if (ctl == ap_payment::kForced && !due) r.note = "Forced: paid before it's due.";
+            else if (!due) r.note = "Not due: check it to pay it now.";
+            listed_.push_back({p.item.batchno, ctl, due});
             rows.push_back(std::move(r));
         }
         return rows;
     }
-    TaskStep RunAll(cb4sqlite::Code4& code, const std::vector<TaskRow>&) override
+    std::string Summary(const std::vector<TaskRow>& rows) const override
+    {
+        if (rows.empty()) return "Nothing to do: no invoices are open.";
+        int checked = 0;
+        std::int64_t owed = 0;
+        for (const TaskRow& r : rows)
+            if (r.checked) {
+                ++checked;
+                owed += m::ParseAmount(r.cells[3]).value_or(0);
+            }
+        return std::to_string(rows.size()) + " open " + Noun(static_cast<int>(rows.size())) + ", " + std::to_string(checked) +
+               " to pay (" + money(owed) + "). An unchecked invoice is held.";
+    }
+    TaskStep RunAll(cb4sqlite::Code4& code, const std::vector<TaskRow>& checked) override
     {
         const ApAccounts setat = LoadApAccounts(code);
         if (setat.banks.empty()) return {false, "There is no bank (a GL_SETAT \"CA\" account) to draw the cheques on."};
-        const CreateChequesResult r = CreateCheques(code, option, payDate_, setat.banks.front().account, NextChequeNumber(code));
+        // Blank options are as the classic screen fills them: the first bank, the next number.
+        const ApBank* bank = payment.bank.empty() ? &setat.banks.front() : nullptr;
+        for (const ApBank& b : setat.banks)
+            if (!bank && TrimText(b.shortName) == payment.bank) bank = &b;
+        if (!bank) return {false, "The bank " + payment.bank + " is no longer a GL_SETAT \"CA\" account."};
+        const long first = payment.firstNumber > 0 ? payment.firstNumber : NextChequeNumber(code);
+        if (OpenPeriodOf(code, payment.payDate) == 0) return {false, "The payment date isn't in an open period."};
+
+        // The boxes become the payment controls (TAPHoldForce): what's checked is paid, the rest held.
+        std::vector<std::pair<long, std::string>> undo;
+        int held = 0, released = 0, forced = 0;
+        for (const Listed& l : listed_) {
+            const bool pay = std::any_of(checked.begin(), checked.end(), [&](const TaskRow& r) { return r.key == l.batchno; });
+            std::string want = l.control;
+            if (pay && l.control == ap_payment::kHeld) want = l.due ? ap_payment::kOpen : ap_payment::kForced;
+            else if (pay && l.control == ap_payment::kOpen && !l.due) want = ap_payment::kForced;
+            else if (!pay && (l.control == ap_payment::kForced || (l.control == ap_payment::kOpen && l.due))) want = ap_payment::kHeld;
+            if (want == l.control) continue;
+            if (!SetPaymentControl(code, l.batchno, want)) continue;   // paid meanwhile: CreateCheques decides
+            undo.push_back({l.batchno, l.control});
+            ++(want == ap_payment::kHeld ? held : want == ap_payment::kForced ? forced : released);
+        }
+        auto putBack = [&] {
+            for (const auto& [batchno, ctl] : undo) SetPaymentControl(code, batchno, ctl);
+        };
+        const std::string holds = (held ? ", held " + std::to_string(held) : std::string()) +
+                                  (released ? ", released " + std::to_string(released) : std::string()) +
+                                  (forced ? ", forced " + std::to_string(forced) : std::string());
+
+        const CreateChequesResult r = CreateCheques(code, option, payment.payDate, bank->account, first);
         switch (r.status) {
         case CreateChequesStatus::Created: {
             std::string made;
             for (const ChequeMade& c : r.cheques)
                 made += std::string(made.empty() ? "" : ", ") + "cheque " + std::to_string(c.number) + " to " + c.vendorName + " (" + money(c.amount) + ")";
-            return {true, "Made " + made + ", drawn on " + TrimText(setat.banks.front().shortName) + ". Print them from Print Cheques."};
+            return {true, "Made " + made + ", drawn on " + TrimText(bank->shortName) + holds + ". Print them from Print Cheques."};
         }
-        case CreateChequesStatus::NothingDue: return {true, "Nothing is due by " + dateText(option) + "."};
-        case CreateChequesStatus::BadBank: return {false, "The bank account isn't in the chart."};
-        case CreateChequesStatus::BadNumber: return {false, "Cheque " + std::to_string(r.clash) + " is already on file."};
-        case CreateChequesStatus::ClosedPeriod: return {false, "The payment date isn't in an open period."};
+        case CreateChequesStatus::NothingDue: return {true, "Nothing to pay by " + dateText(option) + holds + "."};
+        case CreateChequesStatus::BadBank: putBack(); return {false, "The bank account isn't in the chart."};
+        case CreateChequesStatus::BadNumber: putBack(); return {false, "Cheque " + std::to_string(r.clash) + " is already on file."};
+        case CreateChequesStatus::ClosedPeriod: putBack(); return {false, "The payment date isn't in an open period."};
         }
+        putBack();
         return {false, ""};
     }
 
 private:
-    std::string payDate_;
+    struct Listed {
+        long batchno;
+        std::string control;   // as listed
+        bool due;
+    };
+    std::vector<Listed> listed_;
 };
 
 class BackupTask : public TaskModel {
@@ -502,7 +567,7 @@ std::string TaskModel::Summary(const std::vector<TaskRow>& rows) const
         if (r.checked && r.selectable) ++checked;
     }
     if (listed == 0) return "Nothing to do: no " + Noun(2) + ".";
-    if (!PerItem()) return std::to_string(listed) + " " + Noun(listed) + ".";
+    if (!Checks()) return std::to_string(listed) + " " + Noun(listed) + ".";
     return std::to_string(listed) + " " + Noun(listed) + " listed, " + std::to_string(checked) + " checked.";
 }
 
@@ -511,7 +576,8 @@ std::string TaskModel::Question(const std::vector<TaskRow>& rows) const
     int n = 0;
     for (const TaskRow& r : rows)
         if (r.checked && r.selectable) ++n;
-    return PerItem() ? Action() + " " + std::to_string(n) + " " + Noun(n) + "?" : Title() + "?";
+    if (PerItem()) return Action() + " " + std::to_string(n) + " " + Noun(n) + "?";
+    return Checks() ? Action() + " for " + std::to_string(n) + " " + Noun(n) + "?" : Title() + "?";
 }
 
 TaskRun RunTask(TaskModel& task, cb4sqlite::Code4& code, std::vector<TaskRow>& rows,

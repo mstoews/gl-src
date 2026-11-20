@@ -11,10 +11,18 @@
 #pragma once
 
 #include "../ReportWriter.h"
+#include "ReportOptions.h"   // ReportPanel
 
 #include <Windows.h>
+
+#include <memory>
 
 // Asks `def`'s questions over `owner`. `answers` holds the last answers to
 // start from (by filter index), and gets the new ones. False on Cancel, or
 // when the report asks nothing it can show.
 bool AskReportQuestions(HWND owner, const rw::ReportDefinition& def, rw::Answers& answers, bool closeAtOnce = false);
+
+// Spec #8 G1: the same questions as a panel above the report's preview
+// (IDD_PNL_RW_PROMPT). `def` and `answers` must outlive it; Read stores the
+// answers in `answers` after OK's checks.
+std::unique_ptr<ReportPanel> MakeQuestionsPanel(const rw::ReportDefinition& def, rw::Answers& answers);

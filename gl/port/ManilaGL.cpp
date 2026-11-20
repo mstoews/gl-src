@@ -422,7 +422,8 @@ bool ManilaGL::OnCommand(WORD id, WORD code, HWND ctl)
         return true;
     case ID_PRINT:                         // File > Print, the toolbar Print button (spec #3 D9)
         if (rpt::win32::PrintActivePreview(*this)) return true;
-        RunReportList();                   // no preview active: the report list (1022)
+        OpenReportGallery(*this);          // no preview active: the report gallery (spec #8 G7; 1022 is Custom Report (classic))
+        NoteRecentPage(CM_REPORT_LIST);
         return true;
     case CM_REPORT_LIST:                   // Reporting > Custom Report, GLSUB: the report gallery (spec #8 S8-M5)
         OpenReportGallery(*this);
@@ -597,27 +598,114 @@ void ManilaGL::OnPageAreaContextMenu(POINT screen)
 
 // ---- the command table: navigation and rights (spec #8 8) ------------------------------
 
+namespace {
+
+// Where a navigation row sits: its icons follow the area (spec #8 G7 follow-up, the
+// ui-ux-pro-max review): vouchers keep an icon per kind of voucher, every report has the
+// report icon, and the other commands have none (their group's icon carries them).
+enum class NavArea { Other, Vouchers, Reports };
+
+NavArea AreaOf(const std::wstring& topTitle)
+{
+    if (topTitle == L"Transactions") return NavArea::Vouchers;
+    if (topTitle == L"Reporting") return NavArea::Reports;
+    return NavArea::Other;
+}
+
+std::wstring Lower(const std::wstring& s)
+{
+    std::wstring t = s;
+    for (wchar_t& c : t) c = static_cast<wchar_t>(towlower(c));
+    return t;
+}
+
+// A group's icon (Segoe Fluent Icons / Segoe MDL2 Assets): every group and sub-group has one.
+wchar_t GroupGlyph(const std::wstring& title)
+{
+    const std::wstring t = Lower(title);
+    static const struct { const wchar_t* words; wchar_t glyph; } kGroups[] = {
+        {L"file", 0xE8B7},                  // Folder
+        {L"fixed assets", 0xE7B8},          // Package
+        {L"accounts payable", 0xE7BF},      // ShoppingCart: vendors
+        {L"accounts receivable", 0xE716},   // People: customers
+        {L"accounts", 0xE8F1},              // Library: the ledger's books
+        {L"voucher reports", 0xE9F9},       // ReportDocument
+        {L"cancel voucher", 0xE733},        // Blocked (not Cancel's X, which reads as "close")
+        {L"post voucher", 0xE930},          // Completed (not Send's paper plane, which reads as "email")
+        {L"transactions", 0xE8AB},          // Switch
+        {L"receipts/payments", 0xE825},     // Bank
+        {L"general ledger", 0xE82D},        // Dictionary (a bound book)
+        {L"financial statements", 0xEB05},  // PieSingle
+        {L"reporting", 0xE9D2},             // AreaChart (its reports have the report icon)
+        {L"maintenance", 0xE90F},           // Repair
+        {L"help", 0xE897},                  // Help
+    };
+    for (const auto& g : kGroups)
+        if (t.find(g.words) != std::wstring::npos) return g.glyph;
+    return 0xE8B7;   // Folder
+}
+
+// A command's icon, or 0 for none. `title` without its " (classic)": a classic dialog has
+// the icon of the screen it stands for.
+wchar_t CommandGlyph(const std::wstring& title, NavArea area)
+{
+    const std::wstring t = Lower(title);
+    auto has = [&t](const wchar_t* w) { return t.find(w) != std::wstring::npos; };
+    if (t == L"home") return 0xE80F;         // Home
+    if (t == L"exit") return 0xE7E8;         // PowerButton
+    if (t == L"using help") return 0xE897;   // Help
+    if (t == L"about") return 0xE946;        // Info
+    // Every report the same (ReportDocument), wherever it's listed.
+    if (area == NavArea::Reports || has(L"report") || has(L"inquiry")) return 0xE9F9;
+    if (area == NavArea::Vouchers) {   // one icon per kind of voucher, the same in Cancel and Post
+        if (has(L"recover")) return 0xE7A7;                              // Undo
+        if (has(L"voucher list")) return 0xEA37;                         // List
+        if (has(L"general ledger") || has(L"prior period")) return 0xE8A5;   // Document: a GL voucher
+        if (has(L"purchase")) return 0xE7BF;                             // ShoppingCart
+        if (has(L"cash")) return 0xE8C7;                                 // PaymentCard
+        if (has(L"sales")) return 0xE719;                                // Shop
+    }
+    return 0;
+}
+
+constexpr const wchar_t* kClassicSuffix = L" (classic)";
+
+} // namespace
+
 void ManilaGL::BuildNavigation()
 {
     ClearNavigation();
-    AddNavItem(TVI_ROOT, L"Home", CM_HOME);   // spec #8 5.5: first
+    AddNavItem(TVI_ROOT, L"Home", CM_HOME, false, CommandGlyph(L"Home", NavArea::Other));   // spec #8 5.5: first
     std::vector<HTREEITEM> open;   // open[d]: the group rows at depth d go into
     bool skipping = false;         // inside the Window menu
     HTREEITEM accounts = nullptr;
-    std::map<WORD, HTREEITEM> parentOf;   // a command's group: its classic dialog goes beside it
+    NavArea area = NavArea::Other;           // the area of the top-level group being filled
+    std::map<HTREEITEM, NavArea> areaOf;     // each group's area: its classic dialogs' icons follow it
+    std::map<WORD, HTREEITEM> parentOf;      // a command's group: its classic dialog goes beside it
     for (const cmd::MenuRow& r : cmd::MenuRows()) {
         if (r.depth == 0) skipping = r.kind == cmd::Kind::Popup && cmd::PlainText(r.text) == L"Window";
         if (skipping || r.kind == cmd::Kind::Separator) continue;
         open.resize(static_cast<size_t>(r.depth));
         HTREEITEM parent = open.empty() ? TVI_ROOT : open.back();
+        const std::wstring text = cmd::PlainText(r.text);
         if (r.kind == cmd::Kind::Popup) {
-            open.push_back(AddNavItem(parent, cmd::PlainText(r.text), 0));
-            if (r.depth == 0 && cmd::PlainText(r.text) == L"Accounts") accounts = open.back();
+            if (r.depth == 0) area = AreaOf(text);
+            open.push_back(AddNavItem(parent, text, 0, false, GroupGlyph(text)));
+            areaOf[open.back()] = area;
+            if (r.depth == 0 && text == L"Accounts") accounts = open.back();
         } else {
-            AddNavItem(parent, cmd::PlainText(r.text), r.id);
+            AddNavItem(parent, text, r.id, false, CommandGlyph(text, r.depth == 0 ? NavArea::Other : area));
             if (!parentOf.count(static_cast<WORD>(r.id))) parentOf[static_cast<WORD>(r.id)] = parent;
         }
     }
+    // A classic dialog: its screen's icon, and " (classic)" in grey (not a clock on every one).
+    auto classic = [this, &areaOf](HTREEITEM parent, const std::wstring& text, WORD id) {
+        const size_t at = text.rfind(kClassicSuffix);
+        const std::wstring base = at == std::wstring::npos ? text : text.substr(0, at);
+        const auto a = areaOf.find(parent);
+        AddNavItem(parent, text, id, false, CommandGlyph(base, a == areaOf.end() ? NavArea::Other : a->second),
+                   at == std::wstring::npos ? std::wstring::npos : at + 1);
+    };
     std::vector<ClassicCommand> classics = ClassicCommands();
     const std::vector<ClassicCommand>& vouchers = VoucherClassicCommands();
     classics.insert(classics.end(), vouchers.begin(), vouchers.end());
@@ -625,12 +713,12 @@ void ManilaGL::BuildNavigation()
     classics.insert(classics.end(), tasks.begin(), tasks.end());
     for (const ClassicCommand& c : classics) {
         const auto p = parentOf.find(c.page);
-        if (p != parentOf.end()) AddNavItem(p->second, c.text, c.classic);
+        if (p != parentOf.end()) classic(p->second, c.text, c.classic);
     }
     // The classic dialog of a screen that became a page (spec #8 Q4): not on the menu.
-    if (accounts) AddNavItem(accounts, L"Sales Customers (classic)", CM_AR_CUSTOMERS_CLASSIC);
+    if (accounts) classic(accounts, L"Sales Customers (classic)", CM_AR_CUSTOMERS_CLASSIC);
     const auto rp = parentOf.find(static_cast<WORD>(CM_REPORT_LIST));
-    if (rp != parentOf.end()) AddNavItem(rp->second, L"Custom Report (classic)", CM_REPORT_LIST_CLASSIC);
+    if (rp != parentOf.end()) classic(rp->second, L"Custom Report (classic)", CM_REPORT_LIST_CLASSIC);
 }
 
 void ManilaGL::RestoreState()

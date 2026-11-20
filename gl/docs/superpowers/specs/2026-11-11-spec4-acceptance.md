@@ -201,6 +201,36 @@ E006 is part of the register until #6 deletes it. Its type's account isn't in th
 | G4 | High DPI and real printers aren't tested. | As in the Spec #3 sheet (G1, G3). | |
 | G5 | The Linux ASan/UBSan build hasn't been run for Spec #4. | No Linux machine this round. | Run `tools/linux/build_tests.sh --run`. |
 
+## Redesign (Spec #8)
+
+The figures and checks above stay as they are. Spec #8 moved some screens onto pages in one window (`2026-11-19-owl-to-win32-sdk-port-spec8-design.md`, §15 criterion 2); this table says where each step whose screen moved is done in the redesigned program. Until Spec #8's acceptance, the old dialog of each moved screen is still reachable as a "(classic)" entry in the navigation pane, so the step can be done either way.
+
+| Criterion and step | Where it's done now | What differs |
+|---|---|---|
+| 1, step 1 (add FU, bad expense account) | Asset Types page: **New**, type the fields, **Save**. | The expense account field is marked and the information bar reads "Not an account in the chart.", not a message box. |
+| 1, step 2 (add FU) | Asset Types page: correct the account, **Save**. | FU appears in the list on the left; there is no **Types** button. |
+| 1, step 3 (change FU) | Asset Types page: pick FU in the list (type in the filter to find it), change the description, **Save**. | No "modify?" question. The type code can't be changed once saved. |
+| 1, step 4 (delete EQ) | Asset Types page: pick EQ, **Delete**. | The delete asks in a task dialog with named buttons; it is still refused because E001 uses EQ. |
+| 1, step 5 (delete FU) | Asset Types page: pick FU, **Delete**, confirm. | No **Top** or **Next**: the list shows EQ and XX. |
+| 2, steps 1–2 (E001, E002) | Fixed Assets page: pick E001, then E002, in the list. | Picking replaces typing the code and **Enter**, and **Next**. |
+| 2, step 3 (new E006) | Fixed Assets page: **New**, type the fields. | None beyond the page layout; type XX still fills its accounts. |
+| 2, step 4 (salvage) | Fixed Assets page: **Save**. | The salvage field is marked and the information bar reads "The salvage value can't be more than the cost." After a good **Save** the record stays on the page instead of the fields clearing. |
+| 2, step 5 (E006 life 24) | Fixed Assets page: pick E006, change the life, **Save**. | No "modify?" question. |
+| 2, step 6 (E004) | Fixed Assets page: pick E004. | The list shows it as "(disposed)", and **Save** is refused, naming its disposal date. |
+| 2, step 7 (type ZZ) | Fixed Assets page: **New**, type `ZZ`, **Save**. | The type field is marked and the message shows in the information bar. |
+| 3, steps 1–2 (run period 7) | Create Voucher task page: choose period 7; the assets due and the skipped ones (with why) are listed; press its action button, then **Yes** in the task dialog. | The list replaces the line and the confirmation's list. It runs in the background; the result line reads "Made GL voucher 104: 2 assets, 600.00." |
+| 3, step 5 (check E001, E002) | Fixed Assets page. | As 2, steps 1–2. |
+| 4, step 1 (run again) | Create Voucher task page. | It reads "Period 7 has been run: GL voucher 104." |
+| 4, step 2 (cancel 104) | Cancel General Ledger Voucher task page: tick voucher 104, press its action button, confirm. Check the assets on the Fixed Assets page. | Check box and action button instead of double-click. |
+| 4, step 3 (run again) | Create Voucher task page. | As 3, steps 1–2. |
+| 4, step 4 (cancel 103) | Cancel General Ledger Voucher task page. | As step 2. |
+| 5, step 1 (post 104) | Post General Ledger Voucher task page: tick voucher 104, press its action button, confirm. | Check box and action button instead of double-click; the result line names what was posted. |
+| 6, step 4 (the entry in Voucher Entry) | GL voucher page. | The whole voucher is typed in the entry grid and saved at once with **Save**. |
+| 6, step 6 (a later period) | Create Voucher task page. | E002 is listed as skipped, "Disposed." |
+| 8, step 1 (run and post) | Create Voucher task page, then Post General Ledger Voucher task page. | As 3, steps 1–2 and 5, step 1. |
+| 8, step 2 (year end) | Year End Consolidation task page. | It runs in the background; the result line reports the year's close instead of a message box. |
+| 8, steps 4–5 (run period 1) | Create Voucher task page: choose period 1. | E001 500.00 and E002 96.00 are listed on the page before the run. |
+
 ## Gaps and triage
 
 Add one row for each `FAIL` or unexpected behaviour found during the walkthrough.

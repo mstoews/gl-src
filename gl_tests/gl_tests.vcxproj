@@ -99,6 +99,8 @@
     <ClCompile Include="test_tasks.cpp" />
     <ClCompile Include="test_home.cpp" />
     <ClCompile Include="test_frame.cpp" />
+    <ClCompile Include="test_acceptance8.cpp" />
+    <ClCompile Include="test_gaps8.cpp" />
     <ClCompile Include="test_assets.cpp" />
     <!-- The portable gl/port sources under test (keep in step with tools/linux/build_tests.sh). -->
     <ClCompile Include="..\gl\port\Accounts.cpp" />

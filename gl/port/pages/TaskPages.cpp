@@ -27,7 +27,9 @@
 #include <CommCtrl.h>
 #include <Uxtheme.h>
 
+#include <algorithm>
 #include <cstdio>
+#include <cstdlib>
 #include <functional>
 #include <map>
 #include <memory>
@@ -57,6 +59,8 @@ const std::vector<std::pair<int, unsigned>> kAnchors = {
     {IDC_TK_ACTION, m::kTopLeft},  {IDC_TK_STOP, m::kTopLeft},       {IDC_TK_ALL, m::kTopLeft},
     {IDC_TK_NONE, m::kTopLeft},    {IDC_TK_REFRESH, m::kTopLeft},    {IDC_TK_LOPTION, m::kTopLeft},
     {IDC_TK_DATE, m::kTopLeft},    {IDC_TK_PERIOD, m::kTopLeft},     {IDC_TK_SUMMARY, m::kTopWide},
+    {IDC_TK_LPAYDATE, m::kTopLeft}, {IDC_TK_PAYDATE, m::kTopLeft},   {IDC_TK_LBANK, m::kTopLeft},
+    {IDC_TK_BANK, m::kTopLeft},    {IDC_TK_LNUMBER, m::kTopLeft},    {IDC_TK_NUMBER, m::kTopLeft},
     {IDC_TK_LIST, m::kAll},        {IDC_TK_PROGRESS, m::kBottomWide}, {IDC_TK_RESULT, m::kBottomWide},
 };
 
@@ -133,12 +137,22 @@ public:
 protected:
     bool OnInitPage() override
     {
+        // A task with no check boxes hides Check all / Check none: Refresh takes Check all's
+        // place, so no gap reads as missing buttons (design review). Before the anchors are
+        // recorded, so the layout keeps it there.
+        if (!model_->Checks()) {
+            RECT r{};
+            GetWindowRect(Item(IDC_TK_ALL), &r);
+            MapWindowPoints(nullptr, form(), reinterpret_cast<POINT*>(&r), 2);
+            SetWindowPos(Item(IDC_TK_REFRESH), nullptr, r.left, r.top, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+        }
         SetAnchors(kAnchors);
         list_ = Item(IDC_TK_LIST);
         fx::SetAccessibleName(list_, wide(model_->Title()) + L": what it acts on");
         SetWindowTheme(list_, L"Explorer", nullptr);
-        ListView_SetExtendedListViewStyle(list_, LVS_EX_FULLROWSELECT | LVS_EX_DOUBLEBUFFER |
-                                                     (model_->PerItem() ? LVS_EX_CHECKBOXES : 0));
+        // LVS_EX_LABELTIP: a cut-off cell (a long path, a long note) shows whole in a tooltip.
+        ListView_SetExtendedListViewStyle(list_, LVS_EX_FULLROWSELECT | LVS_EX_DOUBLEBUFFER | LVS_EX_LABELTIP |
+                                                     (model_->Checks() ? LVS_EX_CHECKBOXES : 0));
         const int dpi = static_cast<int>(GetDpiForWindow(list_));
         int i = 0;
         for (const auto& [heading, width] : model_->Columns()) {
@@ -158,7 +172,7 @@ protected:
             ListView_InsertColumn(list_, i, &c);
         }
         SetDlgItemTextW(form(), IDC_TK_ACTION, (L"&" + wide(model_->Action())).c_str());   // an access key (spec #8 S8-M6)
-        for (int id : {IDC_TK_ALL, IDC_TK_NONE}) ShowWindow(Item(id), model_->PerItem() ? SW_SHOW : SW_HIDE);
+        for (int id : {IDC_TK_ALL, IDC_TK_NONE}) ShowWindow(Item(id), model_->Checks() ? SW_SHOW : SW_HIDE);
         const TaskOption opt = model_->Option();
         SetText(IDC_TK_LOPTION, model_->OptionLabel());
         ShowWindow(Item(IDC_TK_DATE), opt == TaskOption::Date ? SW_SHOW : SW_HIDE);
@@ -174,6 +188,7 @@ protected:
             }
             SendMessageW(combo, CB_SETCURSEL, periods.empty() ? static_cast<WPARAM>(-1) : periods.size() - 1, 0);
         }
+        ShowPaymentOptions();
         SendDlgItemMessageW(form(), IDC_TK_PROGRESS, PBM_SETRANGE32, 0, 1);
         EnableWindow(Item(IDC_TK_STOP), FALSE);
         Load();
@@ -193,7 +208,7 @@ protected:
             case IDC_TK_REFRESH: Load(); return true;
             default: break;
             }
-        if ((code == CBN_SELCHANGE && id == IDC_TK_PERIOD) || code == EN_CHANGE) {
+        if ((code == CBN_SELCHANGE && (id == IDC_TK_PERIOD || id == IDC_TK_BANK)) || code == EN_CHANGE) {
             if (id == IDC_TK_PERIOD) Load();
             return true;   // a task's options aren't a record: never dirty
         }
@@ -206,6 +221,7 @@ protected:
             if (!job_.active()) Load();
             return true;
         }
+        if (nm->idFrom == IDC_TK_PAYDATE) return true;   // an option, not a record
         if (nm->hwndFrom != list_ || nm->code != LVN_ITEMCHANGED || filling_) return false;
         const auto* lv = reinterpret_cast<NMLISTVIEW*>(nm);
         if ((lv->uChanged & LVIF_STATE) && ((lv->uNewState ^ lv->uOldState) & LVIS_STATEIMAGEMASK) && lv->iItem >= 0 &&
@@ -254,6 +270,53 @@ protected:
     }
 
 private:
+    // Create Cheques' row (G8), filled as the classic screen fills it; other
+    // tasks hide it and give its room to the list.
+    void ShowPaymentOptions()
+    {
+        static constexpr int kRow[] = {IDC_TK_LPAYDATE, IDC_TK_PAYDATE, IDC_TK_LBANK, IDC_TK_BANK, IDC_TK_LNUMBER, IDC_TK_NUMBER};
+        if (!model_->HasPaymentOptions()) {
+            for (int id : kRow) ShowWindow(Item(id), SW_HIDE);
+            RECT step{0, 0, 0, 14};   // the row's height in dialog units
+            MapDialogRect(form(), &step);
+            for (int id : {IDC_TK_SUMMARY, IDC_TK_LIST}) {
+                RECT r{};
+                GetWindowRect(Item(id), &r);
+                MapWindowPoints(nullptr, form(), reinterpret_cast<POINT*>(&r), 2);
+                const int grow = id == IDC_TK_LIST ? step.bottom : 0;
+                SetWindowPos(Item(id), nullptr, r.left, r.top - step.bottom, r.right - r.left, r.bottom - r.top + grow,
+                             SWP_NOZORDER | SWP_NOACTIVATE);
+            }
+            return;
+        }
+        PaymentOptions o;
+        try {
+            o = model_->DefaultPaymentOptions(cb);
+        } catch (const std::exception& e) {
+            ShowInfo(fx::InfoKind::Error, wide(e.what()));
+        }
+        fx::SetDateField(Item(IDC_TK_PAYDATE), o.payDate.empty() ? today() : o.payDate);
+        HWND combo = Item(IDC_TK_BANK);
+        banks_.clear();
+        for (const auto& [key, text] : o.banks) {
+            const std::wstring t = wide(text);
+            SendMessageW(combo, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(t.c_str()));
+            banks_.push_back(key);
+        }
+        const auto at = std::find(banks_.begin(), banks_.end(), o.bank);
+        SendMessageW(combo, CB_SETCURSEL, at == banks_.end() ? static_cast<WPARAM>(-1) : static_cast<WPARAM>(at - banks_.begin()), 0);
+        SetText(IDC_TK_NUMBER, o.firstNumber > 0 ? std::to_string(o.firstNumber) : std::string());
+    }
+
+    void ReadPaymentOptions()
+    {
+        if (!model_->HasPaymentOptions()) return;
+        model_->payment.payDate = fx::GetDateField(Item(IDC_TK_PAYDATE));
+        const LRESULT sel = SendDlgItemMessageW(form(), IDC_TK_BANK, CB_GETCURSEL, 0, 0);
+        model_->payment.bank = sel >= 0 && static_cast<size_t>(sel) < banks_.size() ? banks_[static_cast<size_t>(sel)] : std::string();
+        model_->payment.firstNumber = std::atol(Text(IDC_TK_NUMBER).c_str());
+    }
+
     void Load()
     {
         if (job_.active()) return;
@@ -297,7 +360,7 @@ private:
             }
             std::wstring note = wide(r.note);
             ListView_SetItemText(list_, at, static_cast<int>(model_->Columns().size()), note.data());
-            if (model_->PerItem()) {
+            if (model_->Checks()) {
                 // A row that can't be done has no check box (state image 0).
                 ListView_SetItemState(list_, at, INDEXTOSTATEIMAGEMASK(r.selectable ? (r.checked ? 2 : 1) : 0), LVIS_STATEIMAGEMASK);
             }
@@ -323,8 +386,9 @@ private:
         int checked = 0;
         for (const TaskRow& r : rows_)
             if (r.checked && r.selectable) ++checked;
+        ReadPaymentOptions();
         if (ask) {
-            if (model_->PerItem() && checked == 0) {
+            if (model_->Checks() && checked == 0) {
                 ShowInfo(fx::InfoKind::Information, L"Check what to " + wide(model_->Action()) + L" in the list.");
                 return false;
             }
@@ -358,7 +422,7 @@ private:
             return false;
         }
         HideInfo();
-        for (int id : {IDC_TK_ACTION, IDC_TK_ALL, IDC_TK_NONE, IDC_TK_REFRESH, IDC_TK_DATE, IDC_TK_PERIOD}) EnableWindow(Item(id), FALSE);
+        for (int id : {IDC_TK_ACTION, IDC_TK_ALL, IDC_TK_NONE, IDC_TK_REFRESH, IDC_TK_DATE, IDC_TK_PERIOD, IDC_TK_PAYDATE, IDC_TK_BANK, IDC_TK_NUMBER}) EnableWindow(Item(id), FALSE);
         EnableWindow(Item(IDC_TK_STOP), TRUE);
         SetText(IDC_TK_RESULT, "Starting...");
         SetPageTitle(wide(model_->Title()) + L" - running");
@@ -384,7 +448,7 @@ private:
         case m::JobPhase::Failed: ShowInfo(fx::InfoKind::Error, L"It failed: " + wide(s.message())); break;
         default: break;
         }
-        for (int id : {IDC_TK_ACTION, IDC_TK_ALL, IDC_TK_NONE, IDC_TK_REFRESH, IDC_TK_DATE, IDC_TK_PERIOD}) EnableWindow(Item(id), TRUE);
+        for (int id : {IDC_TK_ACTION, IDC_TK_ALL, IDC_TK_NONE, IDC_TK_REFRESH, IDC_TK_DATE, IDC_TK_PERIOD, IDC_TK_PAYDATE, IDC_TK_BANK, IDC_TK_NUMBER}) EnableWindow(Item(id), TRUE);
         EnableWindow(Item(IDC_TK_STOP), FALSE);
         SetPageTitle(wide(model_->Title()));
         Broadcast(model_->Groups());
@@ -398,6 +462,7 @@ private:
     }
 
     std::unique_ptr<TaskModel> model_;
+    std::vector<std::string> banks_;   // the bank list's short names (G8)
     std::vector<TaskRow> rows_;
     std::shared_ptr<std::vector<TaskRow>> work_;   // the job's copy, until it finishes
     fx::Job job_;

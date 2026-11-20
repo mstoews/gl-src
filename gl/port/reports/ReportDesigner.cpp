@@ -15,15 +15,21 @@
 //     unless a label is typed.
 //   - The working copy is the dialog's ReportDefinition: each control writes
 //     its part as it changes, so Preview and Save read one place.
+//   - Spec #8 G1: the same dialog class is the designer page's form
+//     (IDD_PNL_RW_DESIGN, a child copy of IDD_RW_DESIGN) beside an embedded
+//     preview. As a page its changes, title, Preview and Close go to the page
+//     (DesignerHost); Esc no longer closes it, only the Close button does.
 //
 #include "ReportDesigner.h"
 
 #include "../Accounts.h"   // TrimText
+#include "../DataChanged.h"
 #include "../Globals.h"
 #include "../MainDialog.h"
 #include "../ReportWriter.h"
 #include "ReportPrompt.h"
 #include "RunReport.h"     // CurrentReportContext
+#include "../pages/TaskModels.h"   // data_group
 
 #include "report/win32/Preview.h"
 
@@ -31,6 +37,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <exception>
+#include <map>
 #include <string>
 #include <vector>
 
@@ -170,11 +177,40 @@ private:
     std::vector<size_t> numeric_;   // the field combos' entries: source field indexes
 };
 
+// What the designer tells its page (G1).
+class DesignerHost {
+public:
+    virtual ~DesignerHost() = default;
+    virtual void DefinitionChanged() = 0;               // rebuild the preview soon
+    virtual void PreviewNow() = 0;                      // the Preview button: rebuild now, asking the questions
+    virtual void CloseDesigner() = 0;                   // the Close button
+    virtual void Retitle(const std::wstring& name, bool dirty) = 0;
+    virtual void Saved() = 0;
+};
+
 class DesignerDialog : public MainDialog {
 public:
-    DesignerDialog(long number, bool copy, bool closeAtOnce) : number_(number), copy_(copy), closeAtOnce_(closeAtOnce) {}
+    DesignerDialog(long number, bool copy, bool closeAtOnce, DesignerHost* host = nullptr)
+        : number_(number), copy_(copy), closeAtOnce_(closeAtOnce), host_(host)
+    {
+    }
 
     long saved = 0;
+
+    // As a page's form (G1).
+    HWND CreateChild(HWND parent, int id)
+    {
+        HWND h = CreateModeless(hInst, IDD_PNL_RW_DESIGN, parent);
+        if (!h) return nullptr;
+        SetWindowLongPtrW(h, GWLP_ID, id);
+        fx::AddModeless(h);
+        return h;
+    }
+    const rw::ReportDefinition& definition() const noexcept { return def_; }
+    long number() const noexcept { return number_; }
+    bool dirty() const noexcept { return dirty_; }
+    bool SaveNow() { return Save(); }
+    bool MayClose() { return AskToSave(); }
 
 protected:
     bool OnInitDialog() override
@@ -250,11 +286,20 @@ protected:
         case IDC_RW_PAGE2: ReadSortGroups(); return true;
         case IDC_RW_FADD: AddFilter(); return true;
         case IDC_RW_FREMOVE: RemoveFilter(); return true;
-        case IDC_RW_PREVIEW: Preview(); return true;
+        case IDC_RW_PREVIEW:
+            if (host_) host_->PreviewNow();
+            else Preview();
+            return true;
         case IDC_RW_SAVE: Save(); return true;
         case IDCANCEL:
+            if (host_) {   // a page: the Close button, not Esc
+                if (ctl) host_->CloseDesigner();
+                return true;
+            }
             if (AskToSave()) End(saved ? IDOK : IDCANCEL);   // not MainDialog::Cancel: the list's tables stay open
             return true;
+        case IDOK:
+            return host_ != nullptr;   // Enter on a page: nothing to press
         default: return MainDialog::OnCommand(id, code, ctl);
         }
     }
@@ -341,6 +386,10 @@ private:
 
     void Caption()
     {
+        if (host_) {
+            host_->Retitle(number_ || !def_.name.empty() ? wide(def_.name) : L"new report", dirty_);
+            return;
+        }
         std::wstring c = number_ ? L"Report Designer - " + wide(def_.name) : L"Report Designer - new report";
         if (dirty_) c += L" *";
         SetWindowTextW(hwnd(), c.c_str());
@@ -485,6 +534,7 @@ private:
 
     void Changed()
     {
+        if (host_) host_->DefinitionChanged();
         if (!dirty_) {
             dirty_ = true;
             Caption();
@@ -742,6 +792,7 @@ private:
         saved = number_;
         dirty_ = false;
         Caption();
+        if (host_) host_->Saved();
         return true;
     }
 
@@ -756,16 +807,186 @@ private:
         }
     }
 
+    bool OnDestroy() override
+    {
+        if (host_) fx::RemoveModeless(hwnd());
+        return false;
+    }
+
     long number_;
     bool copy_;
     bool closeAtOnce_;
+    DesignerHost* host_;
     bool dirty_ = false;
     bool filling_ = false;   // the controls are being filled: their notifications aren't edits
     rw::ReportDefinition def_;
     rw::Answers previewAnswers_;   // the last answers Preview was given
 };
 
+// ---- the designer page (spec #8 G1) ----------------------------------------------------
+
+constexpr UINT_PTR kRebuildTimer = 1;
+constexpr UINT kRebuildDelay = 600;   // ms after the last change
+
+std::map<long, HWND> gOpenDesigners;   // definition -> its page (saved definitions only)
+
+class DesignerPage : public fx::Page, private DesignerHost {
+public:
+    DesignerPage(long number, bool copy) : fx::Page(IDD_PG_RW_DESIGN), dlg_(number, copy, false, this), number_(copy ? 0 : number) {}
+
+    bool Save() override { return dlg_.SaveNow(); }
+    bool CanClose() override { return dlg_.MayClose(); }
+    // After Open: the title and "•" the form asked for while it was being made.
+    void ApplyTitle()
+    {
+        SetPageTitle(wantTitle_);
+        SetDirty(dlg_.dirty());
+    }
+
+protected:
+    void OnFinalMessage() override { delete this; }
+
+    bool OnInitPage() override
+    {
+        RECT host = placeholder(IDC_RWD_HOST), view = placeholder(IDC_RWD_PREVIEW);
+        HWND d = dlg_.CreateChild(form(), IDC_RWD_HOST);
+        if (!d) return false;
+        SetWindowPos(d, HWND_TOP, host.left, host.top, host.right - host.left, host.bottom - host.top, SWP_NOACTIVATE | SWP_SHOWWINDOW);
+        preview_ = rpt::win32::CreatePreviewChild(form(), IDC_RWD_PREVIEW, Note("Add a column to see the report here."));
+        if (!preview_) return false;
+        SetWindowPos(preview_, d, view.left, view.top, view.right - view.left, view.bottom - view.top, SWP_NOACTIVATE);
+        SetAnchors({{IDC_RWD_HOST, fx::model::kTopLeft}, {IDC_RWD_PREVIEW, fx::model::kAll}});
+        Rebuild(false);
+        return true;
+    }
+
+    bool OnMessage(UINT msg, WPARAM wp, LPARAM lp, LRESULT& result) override
+    {
+        if (msg == WM_TIMER && wp == kRebuildTimer) {
+            KillTimer(hwnd(), kRebuildTimer);
+            Rebuild(false);
+            result = 0;
+            return true;
+        }
+        if (msg == WM_DESTROY) {
+            KillTimer(hwnd(), kRebuildTimer);
+            if (number_ && gOpenDesigners[number_] == hwnd()) gOpenDesigners.erase(number_);
+        }
+        return fx::Page::OnMessage(msg, wp, lp, result);
+    }
+
+private:
+    // A placeholder's rectangle in the form, the placeholder removed (its ID goes to the real window).
+    RECT placeholder(int id)
+    {
+        RECT r{};
+        HWND h = Item(id);
+        GetWindowRect(h, &r);
+        MapWindowPoints(nullptr, form(), reinterpret_cast<POINT*>(&r), 2);
+        DestroyWindow(h);
+        return r;
+    }
+
+    rpt::Report Note(const std::string& text) const
+    {
+        rpt::Report r;
+        const rw::ReportDefinition& d = dlg_.definition();
+        r.title = TrimText(d.title).empty() ? (TrimText(d.name).empty() ? std::string("(new report)") : d.name) : d.title;
+        r.subtitles = {text};
+        return r;
+    }
+
+    // The preview from the definition as it stands; `ask`: the Preview button (questions asked).
+    void Rebuild(bool ask)
+    {
+        if (!preview_) return;
+        rw::ReportDefinition d = dlg_.definition();
+        if (TrimText(d.name).empty()) d.name = "(new report)";
+        if (TrimText(d.title).empty()) d.title = d.name;
+        if (d.columns.empty()) {
+            rpt::win32::SetPreviewReport(preview_, Note("Add a column to see the report here."));
+            return;
+        }
+        bool asks = false;
+        for (const rw::Filter& f : d.filters) asks = asks || f.ask;
+        if (asks && ask) {
+            if (!AskReportQuestions(host() ? host()->hostWindow() : hwnd(), d, answers_)) return;
+            answered_ = true;
+        } else if (asks && !answered_) {
+            rpt::win32::SetPreviewReport(preview_, Note("This report asks questions when it runs: press Preview to answer them."));
+            return;
+        }
+        try {
+            const ReportContext ctx = CurrentReportContext();
+            rw::BuildResult b = rw::BuildReport(cb, ctx, d, answers_);
+            if (!b.report) {
+                rpt::win32::SetPreviewReport(preview_, Note(b.refusal));
+                return;
+            }
+            rpt::Report r = std::move(*b.report);
+            r.company = ctx.company;
+            r.printedOn = ctx.printedOn;
+            rpt::win32::SetPreviewReport(preview_, std::move(r));
+        } catch (const std::exception& e) {
+            rpt::win32::SetPreviewReport(preview_, Note(std::string("The report could not be prepared: ") + e.what()));
+        }
+    }
+
+    // DesignerHost
+    void DefinitionChanged() override
+    {
+        if (hwnd()) SetTimer(hwnd(), kRebuildTimer, kRebuildDelay, nullptr);
+    }
+    void PreviewNow() override
+    {
+        KillTimer(hwnd(), kRebuildTimer);
+        Rebuild(true);
+    }
+    void CloseDesigner() override { ClosePage(); }
+    void Retitle(const std::wstring& name, bool dirty) override
+    {
+        wantTitle_ = L"Design: " + name;
+        SetPageTitle(wantTitle_);
+        SetDirty(dirty);
+    }
+    void Saved() override
+    {
+        if (dlg_.number() && !number_) {
+            number_ = dlg_.number();
+            gOpenDesigners[number_] = hwnd();
+        }
+        SetDirty(false);
+        NotifyDataChanged(data_group::kReports, hwnd());   // the gallery lists it
+    }
+
+    DesignerDialog dlg_;
+    long number_;              // the saved definition this page edits; 0 until a new one is saved
+    HWND preview_ = nullptr;
+    rw::Answers answers_;
+    bool answered_ = false;
+    std::wstring wantTitle_ = L"Design";
+};
+
 } // namespace
+
+HWND OpenReportDesigner(fx::PageHost& host, long number, bool copy)
+{
+    rw::EnsureReportWriterTables(cb);
+    if (number && !copy)
+        if (const auto it = gOpenDesigners.find(number); it != gOpenDesigners.end() && IsWindow(it->second)) {
+            host.ActivatePage(it->second);
+            return it->second;
+        }
+    auto* page = new DesignerPage(number, copy);
+    HWND h = page->Open(host, L"Design");
+    if (!h) {
+        delete page;
+        return nullptr;
+    }
+    page->ApplyTitle();
+    if (number && !copy) gOpenDesigners[number] = h;
+    return h;
+}
 
 long RunReportDesigner(HWND owner, long number, bool copy, bool closeAtOnce)
 {
