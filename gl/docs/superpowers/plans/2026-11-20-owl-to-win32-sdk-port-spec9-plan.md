@@ -3,7 +3,7 @@
 **Spec reference:** `gl/docs/superpowers/specs/2026-11-19-owl-to-win32-sdk-port-spec8-design.md`, §5.1 (list and detail) and §5.3 (task pages). This plan adds no design of its own beyond the decisions in [Decisions](#decisions) below.
 **Gap:** G3 of `gl/docs/superpowers/specs/2026-11-19-spec8-acceptance.md` ("Budget Data, Company Profile's accounts and banks, Print Cheques, Confirm Printed Cheques, Restore and Bank Reconciliation are still dialogs." Deferred: a later spec).
 **Date:** 2026-11-20
-**Plan status:** Reviewed; Q1–Q4 answered (2026-11-20). S9-M0 to S9-M4 built.
+**Plan status:** Reviewed; Q1–Q4 answered (2026-11-20). S9-M0 to S9-M5 built; waiting for the walkthrough and sign-off (M5 task 3).
 
 **Paths:** relative to the repository root. The screens today:
 
@@ -329,6 +329,29 @@ S is less than a day, M is 1–3 days. **Parallel work:** M3 and M4 need only Sp
 ---
 
 ## Milestone 5 — Acceptance
+
+> **As built (2026-11-20).** Tasks 1 and 2 are done; task 3 is the finance team's.
+> - **The sheet:** `gl/docs/superpowers/specs/2026-11-20-spec9-acceptance.md`, in the Spec #8 sheet's shape: run details, P1 and P2, the fixture, a criterion per screen (Budget Data, Company Profile, Cheques, Bank Reconciliation, Restore), one for writes during a job (D8), one for the keyboard, accessibility and 150 %, and one for the earlier sheets, then gaps and sign-off. The plan didn't name a sheet of its own; the walkthrough and sign-off (task 3) need one.
+>   - **Known gaps K1 to K4:**
+>     - K1, what changed from the plan (the Banks grid, Confirm's check boxes, the Restore list's checks);
+>     - K2, the 5-minute Debug `/stress`;
+>     - K3, the S9-M1 `/checkres` failure that didn't recur;
+>     - K4, Transaction Inquiry still a dialog.
+> - **The other sheets** (task 1):
+>   - **Spec #8, G3:** "Fixed (Spec #9)", naming this plan and its sheet.
+>   - **Spec #2 and #5:** their redesign tables gained each moved step as each milestone landed (S9-M1 Budget Data, S9-M2 Company Profile, S9-M3 the cheques, S9-M4 Restore). Their figures are unchanged.
+> - **The figures** (task 2):
+>   - **`gl_tests/test_acceptance9.cpp`** ("The Spec #9 acceptance figures", `[acceptance9]`) runs the Spec #2 sheet's moved steps in its order, on one copy of the fixture in a folder of its own (the Restore page lists the files beside the company file):
+>     - voucher 104 as #2 and #3 leave it, and #5's Post all;
+>     - #10 on the Budget tab (period 7's −850.00, three budgets saved and read back, no other account changed);
+>     - #12 through the Backup and Restore task pages (150002 gone, `dev.db.bak` has it, a text file and a GL.INI copy refused);
+>     - #13 on Company Profile's Banks tab (101000, 102101).
+>   - **The Spec #5 sheet's #7 and #8** are a section of its own walkthrough test (`test_ap.cpp`). Catch2 runs that test twice: once with #7 and #8 through the classic calls, as before, and once on the Cheques and Bank Reconciliation pages, with every message the sheet quotes. Both then run the same #8 transfer, #9 purge and #10 figures, so the pages leave the tables as the classic calls do.
+>
+>   `gl_tests` 239.
+> - **Checked:** Debug and Release `/W4 /WX` clean; the suites pass in both; `/checkres`, `/checkaccess` and `/stress` 0 in both.
+> - **A stale Release build:** after the incremental Release build, `gl_tests` failed in a posting-fault test this milestone didn't touch (SIGILL at `test_posting.cpp` 285), three times out of three. A clean rebuild of `gl_tests` passed all 239, three times. The failure was the incremental build's, not the code's. If it comes back, rebuild `gl_tests` (`/t:gl_tests:Rebuild`) before looking further.
+> - **Still to do (task 3):** the Release build check on the test machine, the walkthrough with a witness, triage of what it finds, and sign-off. Then the classic entries go with Spec #8's removals (D9, its gap G4).
 
 1. **The sheets:**
    - the Spec #8 sheet's G3 becomes "Fixed (Spec #9)", with this plan named;
