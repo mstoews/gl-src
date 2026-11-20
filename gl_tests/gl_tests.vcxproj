@@ -96,6 +96,7 @@
     <ClCompile Include="test_pages.cpp" />
     <ClCompile Include="test_grid.cpp" />
     <ClCompile Include="test_voucher_pages.cpp" />
+    <ClCompile Include="test_tasks.cpp" />
     <ClCompile Include="test_assets.cpp" />
     <!-- The portable gl/port sources under test (keep in step with tools/linux/build_tests.sh). -->
     <ClCompile Include="..\gl\port\Accounts.cpp" />
@@ -110,9 +111,11 @@
     <ClCompile Include="..\gl\port\pages\RecordModels.cpp" />
     <ClCompile Include="..\gl\port\pages\GlVoucherModel.cpp" />
     <ClCompile Include="..\gl\port\pages\SubledgerModels.cpp" />
+    <ClCompile Include="..\gl\port\pages\TaskModels.cpp" />
     <ClCompile Include="..\win32fx\src\model\Validate.cpp" />
     <ClCompile Include="..\win32fx\src\model\LookupModel.cpp" />
     <ClCompile Include="..\win32fx\src\model\EntryGridModel.cpp" />
+    <ClCompile Include="..\win32fx\src\model\JobState.cpp" />
     <ClCompile Include="..\gl\port\Assets.cpp" />
     <ClCompile Include="..\gl\port\Vouchers.cpp" />
     <ClCompile Include="..\gl\port\CompanyFiles.cpp" />

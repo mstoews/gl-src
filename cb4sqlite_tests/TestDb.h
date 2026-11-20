@@ -31,6 +31,8 @@ public:
         std::error_code ec;
         std::filesystem::remove(path_, ec);
         std::filesystem::remove(path_.string() + "-journal", ec);
+        std::filesystem::remove(path_.string() + "-wal", ec);
+        std::filesystem::remove(path_.string() + "-shm", ec);
     }
     TempDb(const TempDb&) = delete;
     TempDb& operator=(const TempDb&) = delete;

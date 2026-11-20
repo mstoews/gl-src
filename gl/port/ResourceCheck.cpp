@@ -16,6 +16,7 @@
 #include "pages/CustomersPage.h"
 #include "pages/RecordPage.h"
 #include "pages/VoucherPages.h"
+#include "pages/TaskPages.h"
 
 #include "PortIds.h"
 
@@ -376,6 +377,7 @@ void checkPages(HINSTANCE inst, Report& r)
         pages.push_back({static_cast<int>(d->form), std::wstring(d->title) + L" page", d->anchors});
     for (const VoucherPageForm& f : VoucherPageForms())   // spec #8 S8-M3
         pages.push_back({f.form, f.what, *f.anchors});
+    pages.push_back({IDD_PG_TASK, L"Task page", TaskPageAnchors()});   // S8-M4
     for (const PageCase& p : pages) {
         HWND form = CreateDialogParamW(inst, MAKEINTRESOURCEW(p.id), parent, ProbeProc, 0);
         r.check(form && isChildTemplate(form), fx::Format(L"page %d, %s: the form loads as a child", p.id, p.what.c_str()));

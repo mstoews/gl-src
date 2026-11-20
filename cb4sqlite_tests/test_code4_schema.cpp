@@ -19,7 +19,8 @@ TEST_CASE("Code4::open refuses a missing file unless create is set", "[code4]")
     CHECK(code.isOpen());
     CHECK(code.errorCode == 0);
     CHECK(raw(code, "SELECT count(*) FROM sqlite_master WHERE name IN ('_cb_fields','_cb_tags')") == "2");
-    CHECK(raw(code, "PRAGMA journal_mode") == "delete");
+    CHECK(raw(code, "PRAGMA journal_mode") == "wal");   // spec #8 D8
+    CHECK(raw(code, "PRAGMA busy_timeout") == std::to_string(Code4::kBusyTimeoutMs));
     CHECK(raw(code, "PRAGMA foreign_keys") == "1");
 }
 

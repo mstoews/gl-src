@@ -22,10 +22,12 @@
 #include "RecordPage.h"
 
 #include "../Accounts.h"   // TrimText
+#include "../DataChanged.h"
 #include "../FixedAssetDisposal.h"
 #include "../Globals.h"
 #include "../PortIds.h"
 #include "RecordModels.h"
+#include "TaskModels.h"   // data_group
 
 #include <CommCtrl.h>
 #include <Uxtheme.h>
@@ -458,6 +460,7 @@ void RecordPage::OnFieldChanged(int id)
 
 bool RecordPage::Save()
 {
+    if (SaveWaitsForJob(*this)) return false;
     Read();
     bool ok = true;
     for (const FieldDesc& f : d_.fields)
@@ -475,6 +478,7 @@ bool RecordPage::Save()
     Fill();
     ShowList();
     ShowInfo(fx::InfoKind::Success, wide(r.message));
+    NotifyDataChanged(data_group::kMasters, hwnd());   // spec #8 9.3
     return true;
 }
 
@@ -534,6 +538,7 @@ void RecordPage::Delete()
     Fill();
     ShowList();
     ShowInfo(fx::InfoKind::Success, wide(r.message));
+    NotifyDataChanged(data_group::kMasters, hwnd());
 }
 
 void RecordPage::OnButton(int id)
@@ -642,6 +647,23 @@ bool RecordPage::OnFormNotify(NMHDR* nm, LRESULT& result)
 
 bool RecordPage::OnMessage(UINT msg, WPARAM wp, LPARAM lp, LRESULT& result)
 {
+    if (msg == kDataChanged) {   // spec #8 9.3: another page or a job changed the masters
+        if ((wp & data_group::kMasters) && reinterpret_cast<HWND>(lp) != hwnd()) {
+            if (!IsDirty()) {
+                const std::string key = model_->key();
+                const bool wasNew = model_->isNew();
+                model_->Load();
+                if (!wasNew && !model_->Select(key)) model_->New();
+                Fill();
+                ShowList();
+            } else {
+                ShowInfo(fx::InfoKind::Warning, L"This record may have changed since you opened it. Save keeps your changes; "
+                                                L"Don't save, and choose it again, to see the others'.");
+            }
+        }
+        result = 0;
+        return true;
+    }
     if (msg == WM_DESTROY) {
         const auto it = gOpen.find(command_);
         if (it != gOpen.end() && it->second == hwnd()) gOpen.erase(it);

@@ -375,3 +375,6 @@ FONT 9, "Segoe UI"
 
 // ---- The voucher pages (spec #8 S8-M3) ----
 #include "voucherpages.rc"
+
+// ---- The task page (spec #8 S8-M4) ----
+#include "taskpages.rc"

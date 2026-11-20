@@ -58,9 +58,16 @@ public:
     // Opens the company database (UTF-8 path). Returns r4success, or e4open if
     // the file doesn't exist (and create == false) or can't be opened. Any
     // previously open database is closed first. Pragmas: foreign_keys=ON,
-    // journal_mode=DELETE (a single file, so the legacy file-copy backup stays
-    // correct; WAL would leave committed data in a -wal side file).
+    // journal_mode=WAL and a busy timeout of kBusyTimeoutMs (spec #8 D8, Q6):
+    // a background job writes on its own connection while the pages read, and
+    // a writer waits for another rather than failing. backupTo checkpoints and
+    // leaves its copy in DELETE mode, a single file.
     int open(const char* utf8Path, bool create = false);
+    static constexpr int kBusyTimeoutMs = 10000;
+    // journal_mode=DELETE: for a file handed on as one file (dbf2sqlite's output).
+    void useRollbackJournal();
+    // Writes the WAL's pages into the database file (TRUNCATE); false if a reader held it back.
+    bool checkpoint();
 #ifdef _WIN32
     int open(std::wstring_view path, bool create = false);
 #endif

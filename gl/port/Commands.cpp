@@ -80,6 +80,25 @@ Id RightOf(Id id)
     case CM_APCASH_CLASSIC: return 1079;
     case CM_ARINVOICE_CLASSIC: return 5045;
     case CM_RECEIPTS_CLASSIC: return 4054;
+    // The classic dialogs of the S8-M4 task pages.
+    case CM_TK_POSTGL_CLASSIC: return 10121;
+    case CM_TK_POSTAP_CLASSIC: return 1048;
+    case CM_TK_POSTCASH_CLASSIC: return 1088;
+    case CM_TK_POSTAR_CLASSIC: return 4049;
+    case CM_TK_CANCELGL_CLASSIC: return 3054;
+    case CM_TK_CANCELAP_CLASSIC: return 3064;
+    case CM_TK_CANCELCASH_CLASSIC: return 1085;
+    case CM_TK_CANCELAR_CLASSIC: return 4053;
+    case CM_TK_RECOVERGL_CLASSIC: return 10122;
+    case CM_TK_RECOVERAP_CLASSIC: return CM_AP_RECOVER;
+    case CM_TK_RECOVERAR_CLASSIC: return CM_AR_RECOVER;
+    case CM_TK_TRANSFER_CLASSIC: return 1028;
+    case CM_TK_DEPRECIATION_CLASSIC: return 6003;
+    case CM_TK_YEAREND_CLASSIC: return 1068;
+    case CM_TK_PURGEAP_CLASSIC: return 1066;
+    case CM_TK_PURGEAR_CLASSIC: return 4062;
+    case CM_TK_CHEQUES_CLASSIC: return 1057;
+    case CM_TK_BACKUP_CLASSIC: return 1072;
     default: return id;
     }
 }

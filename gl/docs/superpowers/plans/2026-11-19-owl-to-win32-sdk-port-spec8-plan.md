@@ -2,7 +2,7 @@
 
 **Spec reference:** `gl/docs/superpowers/specs/2026-11-19-owl-to-win32-sdk-port-spec8-design.md`
 **Date:** 2026-11-19
-**Plan status:** In progress (S8-M0 to M3 built)
+**Plan status:** In progress (S8-M0 to M4 built)
 
 **Paths:** relative to the repository root. The shell today is `gl/port/ManilaGL.{h,cpp}` on `win32fx/include/MdiFrame.h`, with the menu, toolbar and status bar from `gl/res/gl.rc` (made by `gl/res/tools/prune_rc.py`) and `win32fx/include/Toolbar.h` / `StatusBar.h`. Screens are `MainDialog` subclasses in `gl/port/`. New framework code goes in `win32fx/` (`Workspace`, `Page`, `Layout`, the controls), the command table in `gl/port/Commands.{h,cpp}`, pages in `gl/port/pages/`, and page templates in `gl/res/port.rc` with their IDs in `gl/port/PortIds.h`.
 
@@ -439,6 +439,61 @@ S is less than a day, M is 1–3 days, L is 3–6 days. **Parallel work:** M2, M
 ---
 
 ## Milestone 4 — Background jobs and the task pages
+
+> **As built (2026-11-19; built and run on Windows 11, VS 18, v145).** Q6 is taken as yes (WAL).
+> - **WAL** (task 2):
+>   - **Opening:** `Code4::open` sets `journal_mode = WAL` and a 10-second busy timeout (`Code4::kBusyTimeoutMs`).
+>   - **Backup:** `backupTo` checkpoints first (`Code4::checkpoint`, TRUNCATE) and leaves the copy in DELETE mode, one file.
+>   - **`dbf2sqlite`'s output** is put back in DELETE mode (`Code4::useRollbackJournal`).
+>   - **Restore** isn't changed: it closes the company file first, which checkpoints it.
+>   - **`cb4sqlite_tests`** (79): a second connection reads during a write, and a second writer waits for the first; a backup taken while another thread writes is one file in DELETE mode and passes `integrity_check`.
+> - **`fx::Job`** (task 3, `win32fx/include/Job.h`):
+>   - **Running:** a worker thread runs a function that opens its own connection. Progress goes to the page by `PostMessage` (`kProgress`, `kFinished`); Stop sets a flag the function checks between steps.
+>   - **The state** is the portable `model::JobState` (queued, running, cancelling, done, failed, cancelled), read under a lock.
+>   - **One writing job at a time:** `model::JobGate` refuses a second with the first's name.
+>   - **While a job writes:** the writing commands are off, and the status bar says which job (rather than a tooltip). A page's save stops at once, with "… is writing to the books: save again when it has finished." in its information bar (§9.1, R5). Deviation: the save doesn't queue itself; the user saves again.
+> - **Progress in the cores** (task 4), by the task layer rather than in the cores:
+>   - **Post, Cancel and Recover** call the cores once per checked voucher (each its own transaction, as their `number` argument allows), so progress counts vouchers and Stop ends at a voucher boundary. Purge Received Receivables runs per item too (`PurgeReceived(..., only)`).
+>   - **The transfer, the depreciation run, year end, Purge Paid Payables and Create Cheques** are one transaction each. They run as one step: Stop works before they start.
+>   - The cores and the dialogs are unchanged.
+> - **The data-changed broadcast** (task 5, `DataChanged.{h,cpp}`):
+>   - **Notifying:** `NotifyDataChanged(groups, from)` goes to every page and the frame after a page's save, post or delete and after a job. The groups are `data_group` bits: GL vouchers, GL balances, AP, AR, assets, masters, reports.
+>   - **Refreshing:** the voucher list and the receipts page reload. A GL voucher page reloads its voucher, or says it was posted. A record page reloads, or, with unsaved changes, says "This record may have changed since you opened it" (the information bar has no Reload button; choosing the record again reloads it). A task page lists again only for its own tables.
+>   - **The status bar** shows the waiting counts (GL, AP and AR vouchers to post, journal rows to transfer) and the job writing.
+> - **Task pages** (task 6; `pages/TaskModels.{h,cpp}` portable, `pages/TaskPages.cpp`, `IDD_PG_TASK`): one form for every task.
+>   - **The form:** the action, Stop, Check all / none, Refresh, a date or period when the task needs one, the list with check boxes (no check box on a row that can't be done, with why), the summary, progress and the result.
+>   - **The tasks:** Post (GL, purchase, cash, sales: 10121, 1048, 1088, 4049), Cancel (3054, 3064, 1085, 4053), Recover (GL, purchase, sales: 10122, `CM_AP_RECOVER`, `CM_AR_RECOVER`), Update AR and AP (1028), the depreciation run (6003), Year end (1068), Purge paid payables (1066), Purge received receivables (4062), Create cheques (1057), and Backup (1072, which reads, so it holds no gate).
+>   - **Results:** refusals go on the rows; the result names what was made ("Made GL voucher 1301 (AP, period 7) ...").
+>   - **Classic entries:** each dialog stays as a "(classic)" entry (`CM_TK_*_CLASSIC`, 20524 to 20541).
+>   - **Not task pages yet** (their dialogs stay):
+>     - Print Cheques and Confirm Printed Cheques, which print;
+>     - Restore, which closes and reopens the company file;
+>     - Bank Reconciliation.
+>
+>     Clear Receipts is M3's receipts page. Create Cheques draws on GL_SETAT's first bank, numbering from the next cheque number; a held invoice is listed with why, and the classic dialog releases it.
+> - **`/checkres`, `/stress`** (task 7): `/checkres` checks the task form. `/stress` opens and closes every task page 25 times (Backup aside: it would write a file), with a dry job on Post GL vouchers (nothing checked) started, stopped and joined.
+> - **Tests** (task 8): `gl_tests` 211, 8 of them in `test_tasks.cpp`:
+>   - the job state machine and the gate;
+>   - a posting of four cancelled after one has posted exactly one;
+>   - **Spec #2:** posting (102, out of balance, unchecked with why), recover and year end;
+>   - **Spec #4:** the depreciation run;
+>   - **Spec #5:** posting, cheques and the purge;
+>   - **Spec #6:** the transfer and the purge;
+>   - Backup's copy passing `integrity_check`.
+>
+>   Each Spec case is compared table by table with the classic call on a second fixture copy.
+> - **Checked:**
+>   - Debug and Release `/W4 /WX` clean; the suites pass in both; `/checkres` 0 in both; `/stress` 0 in both.
+>   - **Driven in the app** on a scratch copy given 300 more open vouchers:
+>     - Post GL vouchers listed 303 (302 checked; 102 out of balance, unchecked).
+>     - Started, it showed "Working: 26 of 302..."; Stop ended after 28, and exactly 28 were posted. The voucher list refreshed itself to 275.
+>     - Started again: a department's save was refused with the job's name and wrote nothing. The Chart of Accounts was browsed meanwhile, the frame answering a message in 0-6 ms. The rest posted (302 in all), the voucher list refreshed to 1, and the save then went through.
+>     - Update AR and AP made GL vouchers 1301 (AP) and 1302 (AR) and said so.
+> - **Not driven:**
+>   - the status bar's text (it can't be read across processes without a pointer);
+>   - the other task pages' runs (the tests cover them).
+>
+>   The screen captures of this drive caught the desktop, not the program (it wasn't in front), and were discarded.
 
 **Goal:** batch work runs off the UI thread, pages stay current, and every batch screen is a task page.
 

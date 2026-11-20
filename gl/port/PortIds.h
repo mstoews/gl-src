@@ -47,6 +47,20 @@
 #define IDD_PG_ARINVOICE        20020
 #define IDD_PG_RECEIPTS         20021
 #define IDD_PG_VOUCHERLIST      20022
+// The task page's form and controls (spec #8 S8-M4, gl/res/taskpages.rc; 22400-22419).
+#define IDD_PG_TASK             20023
+#define IDC_TK_ACTION           22400
+#define IDC_TK_STOP             22401
+#define IDC_TK_ALL              22402
+#define IDC_TK_NONE             22403
+#define IDC_TK_REFRESH          22404
+#define IDC_TK_LOPTION          22405
+#define IDC_TK_DATE             22406
+#define IDC_TK_PERIOD           22407
+#define IDC_TK_SUMMARY          22408
+#define IDC_TK_LIST             22409
+#define IDC_TK_PROGRESS         22410
+#define IDC_TK_RESULT           22411
 
 // ---- controls --------------------------------------------------------------
 
@@ -309,6 +323,25 @@
 #define CM_APCASH_CLASSIC       20521   // Cash Invoice Vouchers (1079)
 #define CM_ARINVOICE_CLASSIC    20522   // Sales Invoice Vouchers (5045)
 #define CM_RECEIPTS_CLASSIC     20523   // Clear Receipts (4054)
+// The classic dialogs of the batch screens that became task pages in S8-M4 (spec #8 Q4).
+#define CM_TK_POSTGL_CLASSIC        20524   // Post General Ledger (10121)
+#define CM_TK_POSTAP_CLASSIC        20525   // Post Purchase Vouchers (1048)
+#define CM_TK_POSTCASH_CLASSIC      20526   // Post Cash Vouchers (1088)
+#define CM_TK_POSTAR_CLASSIC        20527   // Post Sales Voucher (4049)
+#define CM_TK_CANCELGL_CLASSIC      20528   // Cancel General Ledger (3054)
+#define CM_TK_CANCELAP_CLASSIC      20529   // Cancel Purchase Vouchers (3064)
+#define CM_TK_CANCELCASH_CLASSIC    20530   // Cancel Cash Invoice Vouchers (1085)
+#define CM_TK_CANCELAR_CLASSIC      20531   // Cancel Sales Invoice Voucher (4053)
+#define CM_TK_RECOVERGL_CLASSIC     20532   // Recover General Ledger Voucher (10122)
+#define CM_TK_RECOVERAP_CLASSIC     20533   // Recover Purchase Voucher (CM_AP_RECOVER)
+#define CM_TK_RECOVERAR_CLASSIC     20534   // Recover Sales Voucher (CM_AR_RECOVER)
+#define CM_TK_TRANSFER_CLASSIC      20535   // Update AR and AP (1028)
+#define CM_TK_DEPRECIATION_CLASSIC  20536   // Fixed Assets > Create Voucher (6003)
+#define CM_TK_YEAREND_CLASSIC       20537   // Year End Consolidation (1068)
+#define CM_TK_PURGEAP_CLASSIC       20538   // Purge Paid Payables (1066)
+#define CM_TK_PURGEAR_CLASSIC       20539   // Purge Received Receivables (4062)
+#define CM_TK_CHEQUES_CLASSIC       20540   // Create Cheques (1057)
+#define CM_TK_BACKUP_CLASSIC        20541   // Backup Databases (1072)
 #define CM_RW_DESIGN            20507   // not a command: the "Report Writer" accessm row (rw::kDesignRightId; spec #7 D8, S7-M5)
 
 // ---- strings ---------------------------------------------------------------

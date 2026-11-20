@@ -63,6 +63,7 @@
     <ClInclude Include="port\Company.h" />
     <ClInclude Include="port\CompanyFiles.h" />
     <ClInclude Include="port\CompanyProfile.h" />
+    <ClInclude Include="port\DataChanged.h" />
     <ClInclude Include="port\DepreciationRun.h" />
     <ClInclude Include="port\FixedAssetDisposal.h" />
     <ClInclude Include="port\FixedAssetTypes.h" />
@@ -97,6 +98,8 @@
     <ClInclude Include="port\pages\RecordModels.h" />
     <ClInclude Include="port\pages\RecordPage.h" />
     <ClInclude Include="port\pages\SubledgerModels.h" />
+    <ClInclude Include="port\pages\TaskModels.h" />
+    <ClInclude Include="port\pages\TaskPages.h" />
     <ClInclude Include="port\pages\VoucherPages.h" />
     <ClInclude Include="port\reports\AccountReports.h" />
     <ClInclude Include="port\reports\ApReports.h" />
@@ -142,6 +145,7 @@
     <ClCompile Include="port\Company.cpp" />
     <ClCompile Include="port\CompanyFiles.cpp" />
     <ClCompile Include="port\CompanyProfile.cpp" />
+    <ClCompile Include="port\DataChanged.cpp" />
     <ClCompile Include="port\DepreciationRun.cpp" />
     <ClCompile Include="port\FixedAssetDisposal.cpp" />
     <ClCompile Include="port\FixedAssetTypes.cpp" />
@@ -170,6 +174,8 @@
     <ClCompile Include="port\pages\RecordModels.cpp" />
     <ClCompile Include="port\pages\RecordPages.cpp" />
     <ClCompile Include="port\pages\SubledgerModels.cpp" />
+    <ClCompile Include="port\pages\TaskModels.cpp" />
+    <ClCompile Include="port\pages\TaskPages.cpp" />
     <ClCompile Include="port\pages\VoucherPages.cpp" />
     <ClCompile Include="port\reports\AccountReports.cpp" />
     <ClCompile Include="port\reports\ApReports.cpp" />

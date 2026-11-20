@@ -63,6 +63,7 @@ private:
     std::wstring MenuText(WORD id) const;
     void BuildNavigation();
     void ApplyRights();   // the menu's and toolbar's commands, from the rights
+    void RefreshWaiting();   // the status bar's waiting counts (spec #8 9.3)
     // GL_UISTATE (spec #8 10): the window, the navigation pane, the pinned
     // tabs and the active one, per user. Restored after the login.
     void RestoreState();
