@@ -60,6 +60,8 @@
     <ClInclude Include="include\model\Anchors.h" />
     <ClInclude Include="include\model\Validate.h" />
     <ClInclude Include="include\model\LookupModel.h" />
+    <ClInclude Include="include\EntryGrid.h" />
+    <ClInclude Include="include\model\EntryGridModel.h" />
     <ClInclude Include="include\controls\CustomControls.h" />
     <ClInclude Include="include\controls\Grid.h" />
     <ClInclude Include="src\Internal.h" />
@@ -84,6 +86,8 @@
     <ClCompile Include="src\DateField.cpp" />
     <ClCompile Include="src\model\Validate.cpp" />
     <ClCompile Include="src\model\LookupModel.cpp" />
+    <ClCompile Include="src\EntryGrid.cpp" />
+    <ClCompile Include="src\model\EntryGridModel.cpp" />
     <ClCompile Include="src\StatusBar.cpp" />
     <ClCompile Include="src\controls\Register.cpp" />
     <ClCompile Include="src\controls\EditRules.cpp" />

@@ -41,6 +41,12 @@
 #define IDD_PG_ASSETTYPES       20015
 #define IDD_PG_ASSETS           20016
 #define IDD_PG_USERS            20017
+// The voucher pages' forms (spec #8 S8-M3, gl/res/voucherpages.rc).
+#define IDD_PG_GLVOUCHER        20018
+#define IDD_PG_APVOUCHER        20019
+#define IDD_PG_ARINVOICE        20020
+#define IDD_PG_RECEIPTS         20021
+#define IDD_PG_VOUCHERLIST      20022
 
 // ---- controls --------------------------------------------------------------
 
@@ -141,6 +147,86 @@
 #define IDC_PG_NEW              20300   // a page's New (spec #8 5, S8-M1)
 #define IDC_PG_SAVE             20301   // Save
 #define IDC_PG_DELETE           20302   // Delete
+// The voucher pages' controls (spec #8 S8-M3; 22000-22399).
+#define IDC_VP_POST             22001   // a voucher page's Post
+#define IDC_VP_PREV             22002   // the previous voucher (Ctrl+PgUp)
+#define IDC_VP_NEXT             22003   // the next voucher (Ctrl+PgDn)
+#define IDC_VP_STATE            22005   // the voucher's number and state
+#define IDC_VP_GHEADER          22006   // the header's group box
+#define IDC_VP_GRID             22010   // the entry grid
+#define IDC_VP_SPLIT            22011   // AP / AR: the voucher's lines as they'll be saved
+#define IDC_VP_LSPLIT           22012
+#define IDC_VP_DEBIT            22020   // the totals
+#define IDC_VP_CREDIT           22021
+#define IDC_VP_DIFF             22022
+#define IDC_VP_STATUS           22023
+#define IDC_VP_LDEBIT           22024
+#define IDC_VP_LCREDIT          22025
+#define IDC_VP_LDIFF            22026
+#define IDC_GLV_DATE            22100   // GL voucher
+#define IDC_GLV_PERIOD          22101
+#define IDC_GLV_DESC            22102
+#define IDC_GLV_CHEQUE          22103
+#define IDC_APV_VENDOR          22110   // AP voucher
+#define IDC_APV_VNAME           22111
+#define IDC_APV_INVOICE         22112
+#define IDC_APV_ORDER           22113
+#define IDC_APV_INVDATE         22114
+#define IDC_APV_DUEDATE         22115
+#define IDC_APV_PERIOD          22116
+#define IDC_APV_REF             22117
+#define IDC_APV_TERMS           22118
+#define IDC_APV_VATRATE         22119
+#define IDC_APV_WHRATE          22120
+#define IDC_APV_TYPE            22121
+#define IDC_APV_CREDIT          22122
+#define IDC_APV_CREDITDEPT      22123
+#define IDC_APV_CREDITNAME      22124
+#define IDC_APV_BANK            22125
+#define IDC_APV_VAT             22126
+#define IDC_APV_VATDEPT         22127
+#define IDC_APV_VATNAME         22128
+#define IDC_APV_CHEQUE          22129
+#define IDC_APV_LCHEQUE         22130
+#define IDC_APV_LDUE            22131
+#define IDC_APV_LTERMS          22132
+#define IDC_APV_LCREDIT         22133
+#define IDC_ARV_CUSTOMER        22140   // AR invoice
+#define IDC_ARV_CNAME           22141
+#define IDC_ARV_INVOICE         22142
+#define IDC_ARV_ORDER           22143
+#define IDC_ARV_INVDATE         22144
+#define IDC_ARV_DUEDATE         22145
+#define IDC_ARV_PERIOD          22146
+#define IDC_ARV_REF             22147
+#define IDC_ARV_TERMS           22148
+#define IDC_ARV_VATRATE         22149
+#define IDC_ARV_VIN             22150
+#define IDC_ARV_AR              22151
+#define IDC_ARV_ARDEPT          22152
+#define IDC_ARV_ARNAME          22153
+#define IDC_ARV_VAT             22154
+#define IDC_ARV_VATDEPT         22155
+#define IDC_ARV_VATNAME         22156
+#define IDC_ARV_MEMO            22160
+#define IDC_ARV_LMEMO           22161
+#define IDC_RCP_FILTER          22200   // Clear Receipts
+#define IDC_RCP_LIST            22201
+#define IDC_RCP_ALL             22202
+#define IDC_RCP_GROUP           22203
+#define IDC_RCP_WHO             22210
+#define IDC_RCP_WHAT            22211
+#define IDC_RCP_DATE            22212
+#define IDC_RCP_BANK            22213
+#define IDC_RCP_AMOUNT          22214
+#define IDC_RCP_DISCOUNT        22215
+#define IDC_RCP_REF             22216
+#define IDC_RCP_RECORD          22217
+#define IDC_VL_FILTER           22300   // the voucher list
+#define IDC_VL_LIST             22301
+#define IDC_VL_OPEN             22302
+#define IDC_VL_NEW              22303
+#define IDC_VL_POSTED           22304
 #define IDC_PGC_FILTER          20310   // the Customers page (spec #8 5.1, S8-M1): the filter box
 #define IDC_PGC_LIST            20311   // the customers
 #define IDC_PGC_NUMBER          20320
@@ -216,6 +302,13 @@
 #define CM_ASSETTYPES_CLASSIC   20515   // Asset Types (6036)
 #define CM_ASSETS_CLASSIC       20516   // Fixed Assets > Add/Modify (6000)
 #define CM_USERS_CLASSIC        20517   // User Access (4078)
+// The classic dialogs of the voucher screens that became pages in S8-M3 (spec #8 Q4).
+#define CM_GLVOUCHER_CLASSIC    20518   // General Ledger Voucher (10076, 1007)
+#define CM_PRIOR_CLASSIC        20519   // Prior Period Entry (8081)
+#define CM_APINVOICE_CLASSIC    20520   // Purchase Invoice Vouchers (4044)
+#define CM_APCASH_CLASSIC       20521   // Cash Invoice Vouchers (1079)
+#define CM_ARINVOICE_CLASSIC    20522   // Sales Invoice Vouchers (5045)
+#define CM_RECEIPTS_CLASSIC     20523   // Clear Receipts (4054)
 #define CM_RW_DESIGN            20507   // not a command: the "Report Writer" accessm row (rw::kDesignRightId; spec #7 D8, S7-M5)
 
 // ---- strings ---------------------------------------------------------------

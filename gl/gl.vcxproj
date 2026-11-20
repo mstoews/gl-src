@@ -92,9 +92,12 @@
     <ClInclude Include="port\db_gl_distb.h" />
     <ClInclude Include="port\pages\CustomersModel.h" />
     <ClInclude Include="port\pages\CustomersPage.h" />
+    <ClInclude Include="port\pages\GlVoucherModel.h" />
     <ClInclude Include="port\pages\RecordModel.h" />
     <ClInclude Include="port\pages\RecordModels.h" />
     <ClInclude Include="port\pages\RecordPage.h" />
+    <ClInclude Include="port\pages\SubledgerModels.h" />
+    <ClInclude Include="port\pages\VoucherPages.h" />
     <ClInclude Include="port\reports\AccountReports.h" />
     <ClInclude Include="port\reports\ApReports.h" />
     <ClInclude Include="port\reports\ArReports.h" />
@@ -162,9 +165,12 @@
     <ClCompile Include="port\YearEnd.cpp" />
     <ClCompile Include="port\pages\CustomersModel.cpp" />
     <ClCompile Include="port\pages\CustomersPage.cpp" />
+    <ClCompile Include="port\pages\GlVoucherModel.cpp" />
     <ClCompile Include="port\pages\RecordModel.cpp" />
     <ClCompile Include="port\pages\RecordModels.cpp" />
     <ClCompile Include="port\pages\RecordPages.cpp" />
+    <ClCompile Include="port\pages\SubledgerModels.cpp" />
+    <ClCompile Include="port\pages\VoucherPages.cpp" />
     <ClCompile Include="port\reports\AccountReports.cpp" />
     <ClCompile Include="port\reports\ApReports.cpp" />
     <ClCompile Include="port\reports\ArReports.cpp" />

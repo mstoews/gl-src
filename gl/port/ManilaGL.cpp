@@ -16,6 +16,7 @@
 #include "UiState.h"
 #include "pages/CustomersPage.h"
 #include "pages/RecordPage.h"
+#include "pages/VoucherPages.h"
 #include "Company.h"
 #include "ChartOfAccounts.h"
 #include "FixedAssetTypes.h"
@@ -234,6 +235,11 @@ bool ManilaGL::OnCommand(WORD id, WORD code, HWND ctl)
         OpenRecordPage(*this, id);
         return true;
     }
+    // The voucher screens that are pages (spec #8 S8-M3); their dialogs are the classic commands below.
+    if (IsVoucherPageCommand(id)) {
+        OpenVoucherPage(*this, id);
+        return true;
+    }
     switch (id) {
     case ID_SYSACCESS:                     // TManilaGL::GLSysAccess (posted at startup)
         if (RunLogin(hwnd()) != IDOK) {
@@ -295,10 +301,10 @@ bool ManilaGL::OnCommand(WORD id, WORD code, HWND ctl)
     case CM_AR_CUSTOMERS_CLASSIC:          // the dialog (spec #6 S6-M1), until spec #8's acceptance (Q4)
         RunArCustomers(hwnd());
         return true;
-    case 5045:                             // TManilaGL::ARBatch (ID_ARBATCH): Transactions > Sales Invoice Vouchers (spec #6 S6-M2)
+    case CM_ARINVOICE_CLASSIC:             // (5045) TManilaGL::ARBatch (ID_ARBATCH): Transactions > Sales Invoice Vouchers (spec #6 S6-M2)
         RunArInvoiceEntry(hwnd());
         return true;
-    case 4044:                             // TManilaGL::APBatch (ID_APBATCH): Transactions > Purchase Invoice Vouchers, toolbar (S5-M2)
+    case CM_APINVOICE_CLASSIC:             // (4044) TManilaGL::APBatch (ID_APBATCH): Transactions > Purchase Invoice Vouchers, toolbar (S5-M2)
         RunApInvoiceEntry(hwnd());
         return true;
     case 8074:                             // TManilaGL::APChequeAP: Confirm Printed Cheques (S5-M6, D9)
@@ -313,7 +319,7 @@ bool ManilaGL::OnCommand(WORD id, WORD code, HWND ctl)
     case 1057:                             // TManilaGL::APCreateGLSlip: Receipts/Payments > Create Cheques (S5-M5)
         RunApCreateCheques(hwnd());
         return true;
-    case 1079:                             // TManilaGL::APCash: Transactions > Cash Invoice Vouchers, toolbar (S5-M4)
+    case CM_APCASH_CLASSIC:                // (1079) TManilaGL::APCash: Transactions > Cash Invoice Vouchers, toolbar (S5-M4)
         RunApCashEntry(hwnd());
         return true;
     case 1088:                             // TManilaGL::APPostCash: Post Voucher > Cash Vouchers (S5-M4)
@@ -340,7 +346,7 @@ bool ManilaGL::OnCommand(WORD id, WORD code, HWND ctl)
     case CM_AR_RECOVER:                    // Transactions > Recover Sales Voucher (spec #6 D7, S6-M3)
         RunArRecover(hwnd());
         return true;
-    case 4054:                             // TManilaGL::ARCreateSlip (ID_ARPAYMENT): Clear Receipts (spec #6 S6-M4)
+    case CM_RECEIPTS_CLASSIC:              // (4054) TManilaGL::ARCreateSlip (ID_ARPAYMENT): Clear Receipts (spec #6 S6-M4)
         RunArReceipts(hwnd());
         return true;
     case 4062:                             // TManilaGL::ARPurgeAccts (ID_ARPURGE): Maintenance > Purge Received Receivables (S6-M5)
@@ -349,14 +355,10 @@ bool ManilaGL::OnCommand(WORD id, WORD code, HWND ctl)
     case 1028:                             // TGlWindow::GLUpdateAP: Maintenance > Update AR and AP (S5-M3)
         RunApTransfer(hwnd());
         return true;
-    case ID_MODBATCH:                      // TGlWindow::GLModifyBatch: Transactions > GL Voucher, GLSUB, toolbar
-    case ID_BATCHENT:                      // TGlWindow::GLBatchEnt (the same dialog)
+    case CM_GLVOUCHER_CLASSIC:             // TGlWindow::GLModifyBatch / GLBatchEnt (ID_MODBATCH, ID_BATCHENT): the dialog
         RunVoucherEntry(hwnd());
         return true;
-    case CM_VOUCHER_LIST:                  // Transactions > Voucher List (VoucherBrowser.h)
-        OpenVoucherBrowser(*this);
-        return true;
-    case CM_PRIOR:                         // TGlWindow::GLPrior: Transactions > Prior Period Entry
+    case CM_PRIOR_CLASSIC:                 // TGlWindow::GLPrior (CM_PRIOR): Transactions > Prior Period Entry, the dialog
         RunPriorPeriodEntry(hwnd());
         return true;
     case ID_GLTRANSINQ:                    // TGlWindow::GLTransInquiry: General Ledger Voucher Inquiry
@@ -579,7 +581,10 @@ void ManilaGL::BuildNavigation()
             if (!parentOf.count(static_cast<WORD>(r.id))) parentOf[static_cast<WORD>(r.id)] = parent;
         }
     }
-    for (const ClassicCommand& c : ClassicCommands()) {
+    std::vector<ClassicCommand> classics = ClassicCommands();
+    const std::vector<ClassicCommand>& vouchers = VoucherClassicCommands();
+    classics.insert(classics.end(), vouchers.begin(), vouchers.end());
+    for (const ClassicCommand& c : classics) {
         const auto p = parentOf.find(c.page);
         if (p != parentOf.end()) AddNavItem(p->second, c.text, c.classic);
     }

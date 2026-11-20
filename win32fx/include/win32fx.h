@@ -18,6 +18,7 @@
 #include "MessageLoop.h"
 #include "Ask.h"
 #include "DateField.h"
+#include "EntryGrid.h"
 #include "InfoBar.h"
 #include "Layout.h"
 #include "Lookup.h"
