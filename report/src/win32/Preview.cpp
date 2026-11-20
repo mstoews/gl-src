@@ -3,6 +3,8 @@
 //
 #include "report/win32/Preview.h"
 
+#include "MdiFrame.h"   // win32fx: the modal preview window
+
 #include "report/Csv.h"
 #include "report/Layout.h"
 #include "report/win32/Gdi.h"
@@ -476,7 +478,7 @@ void PreviewWindow::Print()
 
 void PreviewWindow::Export()
 {
-    HWND owner = frame() ? frame()->hwnd() : hwnd();
+    HWND owner = host() ? host()->hostWindow() : hwnd();
     // A file name from the title, without the characters Windows refuses.
     std::wstring name = title();
     for (wchar_t& ch : name)

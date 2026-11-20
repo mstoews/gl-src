@@ -63,6 +63,12 @@ private:
     std::wstring MenuText(WORD id) const;
     void BuildNavigation();
     void ApplyRights();   // the menu's and toolbar's commands, from the rights
+    // GL_UISTATE (spec #8 10): the window, the navigation pane, the pinned
+    // tabs and the active one, per user. Restored after the login.
+    void RestoreState();
+    void SaveState();
+    void OnPinsChanged() override { SaveState(); }
+    bool restored_ = false;
 
     fx::CommandBar toolbar_;
     std::optional<cmd::Rights> rights_;   // loaded at first use: accessm's order is the company's

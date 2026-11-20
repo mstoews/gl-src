@@ -27,6 +27,7 @@
 #define IDD_RW_DESIGN           20005   // the report writer's designer (spec #7 6.2, S7-M2)
 #define IDD_RW_CALC             20006   // the designer's Calculation... (spec #7 5.3, S7-M3)
 #define IDD_RW_PROMPT           20007   // a user report's questions, asked when it runs (spec #7 6.3, S7-M3)
+#define IDD_PG_CUSTOMERS        20008   // the Customers page's form (spec #8 5.1, S8-M1): WS_CHILD | DS_CONTROL
 
 // ---- controls --------------------------------------------------------------
 
@@ -124,6 +125,46 @@
 #define IDC_RW_ADDCALC          20221   // the designer: Calculation...
 #define IDC_RW_EXPORT           20222   // Custom Report: Export... (a .gldef file; spec #7 6.1, S7-M5)
 #define IDC_RW_IMPORT           20223   // Custom Report: Import...
+#define IDC_PG_NEW              20300   // a page's New (spec #8 5, S8-M1)
+#define IDC_PG_SAVE             20301   // Save
+#define IDC_PG_DELETE           20302   // Delete
+#define IDC_PGC_FILTER          20310   // the Customers page (spec #8 5.1, S8-M1): the filter box
+#define IDC_PGC_LIST            20311   // the customers
+#define IDC_PGC_NUMBER          20320
+#define IDC_PGC_SHORT           20321
+#define IDC_PGC_NAME            20322
+#define IDC_PGC_ADDR1           20323
+#define IDC_PGC_ADDR2           20324
+#define IDC_PGC_ADDR3           20325
+#define IDC_PGC_POSTAL          20326
+#define IDC_PGC_PHONE           20327
+#define IDC_PGC_FAX             20328
+#define IDC_PGC_SHIP1           20329
+#define IDC_PGC_SHIP2           20330
+#define IDC_PGC_SHIP3           20331
+#define IDC_PGC_SHIPPOSTAL      20332
+#define IDC_PGC_SHIPPHONE       20333
+#define IDC_PGC_SHIPFAX         20334
+#define IDC_PGC_ARACCT          20335
+#define IDC_PGC_ARDEPT          20336
+#define IDC_PGC_ARNAME          20337
+#define IDC_PGC_SALESACCT       20338
+#define IDC_PGC_SALESDEPT       20339
+#define IDC_PGC_SALESNAME       20340
+#define IDC_PGC_VATACCT         20341
+#define IDC_PGC_VATDEPT         20342
+#define IDC_PGC_VATNAME         20343
+#define IDC_PGC_TERMS           20344
+#define IDC_PGC_VATRATE         20345
+#define IDC_PGC_VIN             20346
+#define IDC_PGC_CONTACT         20347
+#define IDC_PGC_OPEN            20348   // the customer's open items
+#define IDC_PGC_GCUST           20350   // its group boxes
+#define IDC_PGC_GADDR           20351
+#define IDC_PGC_GSHIP           20352
+#define IDC_PGC_GACCT           20353
+#define IDC_PGC_GTERMS          20354
+#define IDC_PGC_GOPEN           20355
 #define IDC_RWC_KIND            20230   // IDD_RW_CALC: the kind, its fields, and the word between them
 #define IDC_RWC_FIELDA          20231
 #define IDC_RWC_FIELDB          20232
@@ -151,6 +192,7 @@
 #define CM_AP_RECOVER           20504   // Transactions > Recover Purchase Voucher (spec #5 D7, S5-M3; ApPosting.h)
 #define CM_AR_RECOVER           20505   // Transactions > Recover Sales Voucher (spec #6 D7, S6-M3; ArPosting.h)
 #define CM_AR_STATEMENTS        20506   // Reporting > Accounts Receivable > Customer Statements (spec #6 7, S6-M6)
+#define CM_AR_CUSTOMERS_CLASSIC 20508   // Sales Customers (classic): the dialog, until spec #8 S8-M7 (Q4)
 #define CM_RW_DESIGN            20507   // not a command: the "Report Writer" accessm row (rw::kDesignRightId; spec #7 D8, S7-M5)
 
 // ---- strings ---------------------------------------------------------------

@@ -43,7 +43,7 @@
   </ImportGroup>
   <PropertyGroup>
     <!-- Catch2 is the copy vendored with cb4sqlite_tests (VENDORED.md). -->
-    <IncludePath>$(GlRoot)cb4sqlite_tests\vendor\catch2;$(GlRoot)gl\port;$(ProjectDir);$(IncludePath)</IncludePath>
+    <IncludePath>$(GlRoot)cb4sqlite_tests\vendor\catch2;$(GlRoot)gl\port;$(GlRoot)win32fx\include;$(ProjectDir);$(IncludePath)</IncludePath>
   </PropertyGroup>
   <ItemDefinitionGroup>
     <Link>
@@ -92,6 +92,7 @@
     <ClCompile Include="test_ar.cpp" />
     <ClCompile Include="test_reportwriter.cpp" />
     <ClCompile Include="test_commands.cpp" />
+    <ClCompile Include="test_ui.cpp" />
     <ClCompile Include="test_assets.cpp" />
     <!-- The portable gl/port sources under test (keep in step with tools/linux/build_tests.sh). -->
     <ClCompile Include="..\gl\port\Accounts.cpp" />
@@ -100,6 +101,10 @@
     <ClCompile Include="..\gl\port\Ar.cpp" />
     <ClCompile Include="..\gl\port\ReportWriter.cpp" />
     <ClCompile Include="..\gl\port\Commands.cpp" />
+    <ClCompile Include="..\gl\port\UiState.cpp" />
+    <ClCompile Include="..\gl\port\pages\CustomersModel.cpp" />
+    <ClCompile Include="..\win32fx\src\model\Validate.cpp" />
+    <ClCompile Include="..\win32fx\src\model\LookupModel.cpp" />
     <ClCompile Include="..\gl\port\Assets.cpp" />
     <ClCompile Include="..\gl\port\Vouchers.cpp" />
     <ClCompile Include="..\gl\port\CompanyFiles.cpp" />

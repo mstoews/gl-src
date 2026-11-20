@@ -27,7 +27,7 @@ def gl_files(pattern):
     # case) and Linux write the same order.
     def tree(sub):
         return sorted(base.glob(sub + pattern), key=lambda f: f.as_posix())
-    found = tree("port/") + tree("port/reports/") + tree("port/stubs/")
+    found = tree("port/") + tree("port/pages/") + tree("port/reports/") + tree("port/stubs/")
     return [str(f.relative_to(base)).replace("/", "\\") for f in found]
 
 
@@ -53,10 +53,15 @@ PROJECTS = [
                   "include\\HandleGuard.h", "include\\StringUtil.h", "include\\Verify.h",
                   "include\\MessageLoop.h", "include\\MdiFrame.h", "include\\Toolbar.h",
                   "include\\StatusBar.h", "include\\Dock.h", "include\\PageHost.h", "include\\Workspace.h",
+                  "include\\Page.h", "include\\Layout.h", "include\\Lookup.h", "include\\InfoBar.h",
+                  "include\\Ask.h", "include\\DateField.h", "include\\model\\Anchors.h",
+                  "include\\model\\Validate.h", "include\\model\\LookupModel.h",
                   "include\\controls\\CustomControls.h", "include\\controls\\Grid.h", "src\\Internal.h",
                   "src\\controls\\ControlsInternal.h", "src\\controls\\EditRules.h"],
          sources=["src\\Window.cpp", "src\\Dialog.cpp", "src\\MessageLoop.cpp", "src\\StringUtil.cpp",
                   "src\\Verify.cpp", "src\\MdiFrame.cpp", "src\\PageHost.cpp", "src\\Workspace.cpp", "src\\Toolbar.cpp",
+                  "src\\Page.cpp", "src\\Layout.cpp", "src\\Lookup.cpp", "src\\InfoBar.cpp", "src\\Ask.cpp",
+                  "src\\DateField.cpp", "src\\model\\Validate.cpp", "src\\model\\LookupModel.cpp",
                   "src\\StatusBar.cpp", "src\\controls\\Register.cpp", "src\\controls\\EditRules.cpp",
                   "src\\controls\\EditBase.cpp", "src\\controls\\PicEdit.cpp", "src\\controls\\DateEdit.cpp",
                   "src\\controls\\FloatEdit.cpp", "src\\controls\\IntEdit.cpp", "src\\controls\\SuperBtn.cpp",

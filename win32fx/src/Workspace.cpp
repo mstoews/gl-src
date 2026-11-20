@@ -5,6 +5,7 @@
 
 #include "MdiFrame.h"   // the legacy Window menu's command IDs
 #include "MessageLoop.h"
+#include "Page.h"
 
 #include <Uxtheme.h>
 #include <windowsx.h>
@@ -24,7 +25,7 @@ constexpr UINT kTabsId = 0xFE02;
 constexpr WORD kFirstPageCommand = 0xFE10;   // the Window menu's page list
 constexpr WORD kMaxListedPages = 9;
 constexpr int kNavWidth96 = 230;
-constexpr WORD kTabClose = 1, kTabCloseOthers = 2;
+constexpr WORD kTabClose = 1, kTabCloseOthers = 2, kTabPin = 3;
 
 Workspace* gKeyWorkspace = nullptr;   // the workspace whose keys the message loop filters
 
@@ -299,14 +300,32 @@ void Workspace::ActivatePage(HWND page)
 
 void Workspace::ClosePage(HWND page)
 {
-    if (indexOf(page) >= 0) DestroyWindow(page);   // WM_PARENTNOTIFY takes its tab away
+    if (indexOf(page) < 0) return;
+    if (Page* p = Page::FromHandle(page)) {
+        if (p->IsDirty()) ActivatePage(page);   // show what it asks about
+        if (!p->CanClose()) return;
+    }
+    DestroyWindow(page);   // WM_PARENTNOTIFY takes its tab away
 }
 
-void Workspace::CloseAllPages()
+bool Workspace::CloseAllPages()
 {
     const std::vector<HWND> all = pages_;
-    for (HWND p : all)
-        if (IsWindow(p)) DestroyWindow(p);
+    for (HWND p : all) {
+        if (!IsWindow(p)) continue;
+        ClosePage(p);
+        if (IsWindow(p)) return false;   // it asked, and stayed
+    }
+    return true;
+}
+
+std::vector<WORD> Workspace::PinnedCommands() const
+{
+    std::vector<WORD> out;
+    for (HWND h : pages_)
+        if (auto* p = dynamic_cast<HostedPage*>(Window::FromHandle(h)); p && p->pinned && p->commandId)
+            out.push_back(p->commandId);
+    return out;
 }
 
 void Workspace::SetPageTitle(HWND page, const wchar_t* title)
@@ -357,10 +376,15 @@ void Workspace::TabMenu(POINT screen)
     ScreenToClient(tabs_, &hit.pt);
     const int i = TabCtrl_HitTest(tabs_, &hit);
     if (i < 0 || i >= static_cast<int>(pages_.size())) return;
+    const HWND page = pages_[static_cast<size_t>(i)];
+    auto* hosted = dynamic_cast<HostedPage*>(Window::FromHandle(page));
     HMENU menu = CreatePopupMenu();
     AppendMenuW(menu, MF_STRING, kTabClose, L"&Close\tCtrl+W");
     AppendMenuW(menu, MF_STRING | (pages_.size() > 1 ? 0 : MF_GRAYED), kTabCloseOthers, L"Close &others");
-    const HWND page = pages_[static_cast<size_t>(i)];
+    AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
+    AppendMenuW(menu,
+                MF_STRING | (hosted && hosted->commandId ? 0 : MF_GRAYED) | (hosted && hosted->pinned ? MF_CHECKED : 0),
+                kTabPin, L"&Pin: open when the program starts");
     const UINT chosen = TrackPopupMenu(menu, TPM_RETURNCMD | TPM_RIGHTBUTTON, screen.x, screen.y, 0, hwnd(), nullptr);
     DestroyMenu(menu);
     if (chosen == kTabClose) {
@@ -368,8 +392,11 @@ void Workspace::TabMenu(POINT screen)
     } else if (chosen == kTabCloseOthers) {
         const std::vector<HWND> all = pages_;
         for (HWND p : all)
-            if (p != page && IsWindow(p)) DestroyWindow(p);
+            if (p != page && IsWindow(p)) ClosePage(p);
         ActivatePage(page);
+    } else if (chosen == kTabPin && hosted) {
+        hosted->pinned = !hosted->pinned;
+        OnPinsChanged();
     }
 }
 
@@ -409,6 +436,7 @@ bool Workspace::Key(const MSG& msg)
 {
     if (msg.message != WM_KEYDOWN || !ctrlDown() || !hwnd()) return false;
     if (msg.hwnd != hwnd() && !IsChild(hwnd(), msg.hwnd)) return false;   // a dialog of its own
+    if (Page* p = Page::FromHandle(active_); p && p->OnShortcut(msg)) return true;   // Ctrl+S, Ctrl+Enter, Ctrl+N
     switch (msg.wParam) {
     case VK_TAB:
         if (pages_.empty()) return false;
@@ -515,6 +543,13 @@ bool Workspace::OnMessage(UINT msg, WPARAM wp, LPARAM lp, LRESULT& result)
         }
         return false;
     }
+    case WM_CLOSE:
+        // Each dirty page asks first; one kept open keeps the program open.
+        if (!CloseAllPages()) {
+            result = 0;
+            return true;
+        }
+        return false;
     case WM_SETFOCUS:
         if (active_) SetFocus(active_);
         else if (nav_ && navVisible_) SetFocus(nav_);

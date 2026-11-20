@@ -56,7 +56,8 @@ std::vector<std::wstring> PathOf(Id id);
 // behind the Chart of Accounts (spec #3 6.4), the Recover Purchase and Sales
 // Voucher items behind Recover General Ledger Voucher, and the Voucher List
 // behind General Ledger Voucher entry: the greying ManilaGL's
-// WM_INITMENUPOPUP added after ApplyMenuAccess.
+// WM_INITMENUPOPUP added after ApplyMenuAccess. The classic Sales Customers
+// dialog (spec #8 S8-M1, not on the menu) follows Sales Customers.
 Id RightOf(Id id);
 
 class Rights {

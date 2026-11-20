@@ -62,6 +62,7 @@ Id RightOf(Id id)
     case CM_AP_RECOVER:
     case CM_AR_RECOVER: return kRecoverGlVoucher;
     case CM_VOUCHER_LIST: return kGlVoucher;
+    case CM_AR_CUSTOMERS_CLASSIC: return 4059;   // Sales Customers (spec #8 S8-M1)
     default: return id;
     }
 }

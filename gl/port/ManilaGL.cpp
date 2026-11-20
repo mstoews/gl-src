@@ -13,6 +13,8 @@
 #include "ArPosting.h"
 #include "ArReceipts.h"
 #include "Commands.h"
+#include "UiState.h"
+#include "pages/CustomersPage.h"
 #include "Company.h"
 #include "ChartOfAccounts.h"
 #include "FixedAssetTypes.h"
@@ -42,7 +44,10 @@
 #pragma comment(lib, "comctl32.lib")   // SetWindowSubclass
 
 #include <algorithm>
+#include <cstdio>
+#include <cstdlib>
 #include <cstring>
+#include <exception>
 #include <iterator>
 #include <string>
 
@@ -51,6 +56,7 @@
 namespace {
 
 constexpr int kWindowMenuPos = 7;            // TManilaGL: ChildMenuPos = 7
+constexpr UINT kRestoreState = WM_APP + 10;   // GL_UISTATE, once the window is shown (spec #8 10)
 
 // Which stub each menu command outside Spec #1 goes to. The command IDs and
 // handler names are TGlWindow's and TManilaGL's response tables
@@ -165,6 +171,7 @@ bool ManilaGL::OnCreate(LPCREATESTRUCTW cs)
     } else {
         strcpy_s(szUser, "NOLOGIN");   // fits; the original wrote strcmp(szUser, "NOLOGIN"), a no-op
         bMenuSetup = TRUE;
+        PostMessageW(hwnd(), kRestoreState, 0, 0);   // after wWinMain shows the window
     }
     RefreshStatus();
     return true;
@@ -219,8 +226,12 @@ bool ManilaGL::OnCommand(WORD id, WORD code, HWND ctl)
     }
     switch (id) {
     case ID_SYSACCESS:                     // TManilaGL::GLSysAccess (posted at startup)
-        if (RunLogin(hwnd()) != IDOK) PostMessageW(hwnd(), WM_COMMAND, fx::CM_EXIT, 0);
+        if (RunLogin(hwnd()) != IDOK) {
+            PostMessageW(hwnd(), WM_COMMAND, fx::CM_EXIT, 0);
+            return true;
+        }
         ApplyRights();                     // the user's menu code
+        RestoreState();                    // the user's window and pages
         return true;
     case ID_ACCESS:                        // Maintenance > User Access
         RunUserAdministration(hwnd());
@@ -268,7 +279,10 @@ bool ManilaGL::OnCommand(WORD id, WORD code, HWND ctl)
     case 4045:                             // TManilaGL::APAddVendors (ID_ADDVENDOR): Accounts > Purchase Vendors (spec #5 S5-M1)
         RunApVendors(hwnd());
         return true;
-    case 4059:                             // TManilaGL::ARAddVendors (ID_AR_CUSTOMER): Accounts > Sales Customers (spec #6 S6-M1)
+    case 4059:                             // TManilaGL::ARAddVendors (ID_AR_CUSTOMER): Accounts > Sales Customers: a page (spec #8 S8-M1)
+        OpenCustomersPage(*this);
+        return true;
+    case CM_AR_CUSTOMERS_CLASSIC:          // the dialog (spec #6 S6-M1), until spec #8's acceptance (Q4)
         RunArCustomers(hwnd());
         return true;
     case 5045:                             // TManilaGL::ARBatch (ID_ARBATCH): Transactions > Sales Invoice Vouchers (spec #6 S6-M2)
@@ -486,6 +500,12 @@ void ManilaGL::NotPorted(WORD id)
 
 bool ManilaGL::OnMessage(UINT msg, WPARAM wp, LPARAM lp, LRESULT& result)
 {
+    if (msg == WM_CLOSE) SaveState();   // while the pinned pages are still open
+    if (msg == kRestoreState) {
+        RestoreState();
+        result = 0;
+        return true;
+    }
     if (Workspace::OnMessage(msg, wp, lp, result)) return true;   // tabs, navigation, the Window menu's pages
     switch (msg) {
     case WM_INITMENUPOPUP:   // TManilaGL::WMInitMenuPopup: the rights, as ApplyMenuAccess and its follow-ons did
@@ -534,13 +554,85 @@ void ManilaGL::BuildNavigation()
     ClearNavigation();
     std::vector<HTREEITEM> open;   // open[d]: the group rows at depth d go into
     bool skipping = false;         // inside the Window menu
+    HTREEITEM accounts = nullptr;
     for (const cmd::MenuRow& r : cmd::MenuRows()) {
         if (r.depth == 0) skipping = r.kind == cmd::Kind::Popup && cmd::PlainText(r.text) == L"Window";
         if (skipping || r.kind == cmd::Kind::Separator) continue;
         open.resize(static_cast<size_t>(r.depth));
         HTREEITEM parent = open.empty() ? TVI_ROOT : open.back();
-        if (r.kind == cmd::Kind::Popup) open.push_back(AddNavItem(parent, cmd::PlainText(r.text), 0));
-        else AddNavItem(parent, cmd::PlainText(r.text), r.id);
+        if (r.kind == cmd::Kind::Popup) {
+            open.push_back(AddNavItem(parent, cmd::PlainText(r.text), 0));
+            if (r.depth == 0 && cmd::PlainText(r.text) == L"Accounts") accounts = open.back();
+        } else {
+            AddNavItem(parent, cmd::PlainText(r.text), r.id);
+        }
+    }
+    // The classic dialog of a screen that became a page (spec #8 Q4): not on the menu.
+    if (accounts) AddNavItem(accounts, L"Sales Customers (classic)", CM_AR_CUSTOMERS_CLASSIC);
+}
+
+void ManilaGL::RestoreState()
+{
+    if (restored_) return;
+    restored_ = true;
+    const std::string user = UiStateUser(szUser);
+    try {
+        if (const auto w = GetUiState(cb, user, "window")) {
+            WINDOWPLACEMENT wp{sizeof wp};
+            int show = 0, l = 0, t = 0, r = 0, b = 0;
+            if (sscanf_s(w->c_str(), "%d %d %d %d %d", &show, &l, &t, &r, &b) == 5 && r > l && b > t) {
+                wp.showCmd = show == SW_SHOWMAXIMIZED ? SW_SHOWMAXIMIZED : SW_SHOWNORMAL;
+                wp.rcNormalPosition = {l, t, r, b};
+                SetWindowPlacement(hwnd(), &wp);
+            }
+        }
+        if (const auto nav = GetUiState(cb, user, "navigation")) SetNavigationVisible(*nav != "0");
+        WORD active = 0;
+        if (const auto a = GetUiState(cb, user, "active")) active = static_cast<WORD>(std::atoi(a->c_str()));
+        if (const auto pins = GetUiState(cb, user, "pins")) {
+            HWND activePage = nullptr;
+            for (const char* p = pins->c_str(); *p;) {
+                const WORD id = static_cast<WORD>(std::strtol(p, const_cast<char**>(&p), 10));
+                if (*p == ',') ++p;
+                if (!id) break;
+                if (!MayRun(id)) continue;
+                OnCommand(id, 0, nullptr);
+                if (auto* page = dynamic_cast<fx::HostedPage*>(fx::Window::FromHandle(activePage = this->activePage()));
+                    page && page->commandId == id)
+                    page->pinned = true;
+            }
+            for (HWND h : pages())
+                if (auto* page = dynamic_cast<fx::HostedPage*>(fx::Window::FromHandle(h)); page && page->commandId == active)
+                    ActivatePage(h);
+            (void)activePage;
+        }
+    } catch (const std::exception&) {
+        // The state is a convenience: a database without GL_UISTATE, or a
+        // read-only one, opens as it always did.
+    }
+}
+
+void ManilaGL::SaveState()
+{
+    if (!restored_ || !hwnd()) return;   // before the login: nothing of the user's yet
+    const std::string user = UiStateUser(szUser);
+    try {
+        WINDOWPLACEMENT wp{sizeof wp};
+        if (GetWindowPlacement(hwnd(), &wp)) {
+            const RECT& n = wp.rcNormalPosition;
+            char buf[96];
+            std::snprintf(buf, sizeof buf, "%u %ld %ld %ld %ld", wp.showCmd == SW_SHOWMAXIMIZED ? SW_SHOWMAXIMIZED : SW_SHOWNORMAL,
+                          n.left, n.top, n.right, n.bottom);
+            SetUiState(cb, user, "window", buf);
+        }
+        SetUiState(cb, user, "navigation", navigationVisible() ? "1" : "0");
+        std::string pins;
+        for (WORD id : PinnedCommands()) pins += (pins.empty() ? "" : ",") + std::to_string(id);
+        SetUiState(cb, user, "pins", pins);
+        const auto* page = dynamic_cast<fx::HostedPage*>(fx::Window::FromHandle(activePage()));
+        SetUiState(cb, user, "active", page && page->commandId ? std::to_string(page->commandId) : std::string());
+    } catch (const std::exception&) {
+        // A read-only company: the state isn't kept, the program goes on.
     }
 }
 

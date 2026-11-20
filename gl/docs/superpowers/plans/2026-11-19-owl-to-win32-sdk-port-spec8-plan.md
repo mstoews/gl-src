@@ -2,7 +2,7 @@
 
 **Spec reference:** `gl/docs/superpowers/specs/2026-11-19-owl-to-win32-sdk-port-spec8-design.md`
 **Date:** 2026-11-19
-**Plan status:** In progress (S8-M0 built)
+**Plan status:** In progress (S8-M0 and M1 built)
 
 **Paths:** relative to the repository root. The shell today is `gl/port/ManilaGL.{h,cpp}` on `win32fx/include/MdiFrame.h`, with the menu, toolbar and status bar from `gl/res/gl.rc` (made by `gl/res/tools/prune_rc.py`) and `win32fx/include/Toolbar.h` / `StatusBar.h`. Screens are `MainDialog` subclasses in `gl/port/`. New framework code goes in `win32fx/` (`Workspace`, `Page`, `Layout`, the controls), the command table in `gl/port/Commands.{h,cpp}`, pages in `gl/port/pages/`, and page templates in `gl/res/port.rc` with their IDs in `gl/port/PortIds.h`.
 
@@ -155,6 +155,60 @@ S is less than a day, M is 1–3 days, L is 3–6 days. **Parallel work:** M2, M
 ---
 
 ## Milestone 1 — Pages, layout and controls; the Customers page
+
+> **As built (2026-11-19; built and run on Windows 11, VS 18, v145).** Started before the finance team's review (the user's choice); Q1, Q3 and Q5 stay as the spec assumes.
+> - **Portable models** (`win32fx/include/model`, `win32fx/src/model`, in namespace `win32fx::model`, aliased `fx::model`), compiled into `gl_tests` too:
+>   - `Anchors.h`: `Place` and `Clamp`, so a page is never laid out below its template's size;
+>   - `Validate.{h,cpp}`: `Required`, `MaxLength` (code points), `WholeNumber`, `Amount`, `Date` and `Exists`, plus `ParseAmount` and `FormatAmount`;
+>   - `LookupModel.{h,cpp}`: matches the code exactly, then a code prefix, then a word of the name, then anywhere in it, with ties in order.
+> - **`fx::Page`** (task 2):
+>   - **The window:** a `HostedPage` holding an `InfoBar` and its form. The form is a `WS_CHILD | DS_CONTROL` template made with `CreateDialogParam` and registered with the message loop, so Tab and access keys work.
+>   - **Layout:** laid out by anchors, scrolling below the template's size.
+>   - **Keys:** Enter moves to the next field, Esc does nothing, Ctrl+S or Ctrl+Enter saves, and Ctrl+N starts a new record. The workspace's key filter passes them on.
+>   - **Changes:** `EN_CHANGE` marks the page dirty (not while it is `Filling`), and its tab shows "•". `CanClose` asks Save, Don't save or Cancel in a task dialog, and the workspace asks before closing a tab, closing all pages, or the program.
+>   - **Field checks:** validators run on `EN_KILLFOCUS`. `MarkField` shows a balloon tip and turns the label red. The field helpers use the same win32fx string functions as `MainDialog`.
+> - **The controls** (task 4): `fx::Layout` (with `Unanchored` for `/checkres`), `fx::Lookup` (a never-activated popup ListView under the edit: Down, Up, Enter, Esc and F4, picked without taking the focus), `fx::InfoBar` (information, success, warning and error; it raises a live-region event), `fx::Ask` (`TaskDialogIndirect`), and `fx::DateField` (yyyymmdd over the date picker). `CommandBar::EnableCommand` came in M0.
+> - **`GL_UISTATE`** (task 5, `UiState.{h,cpp}`): user, key and a memo value, with NOLOGIN stored blank.
+>   - **What's kept:** `ManilaGL` saves the window placement, the navigation pane's visibility, the pinned tabs (by command) and the active tab when it closes, and restores them after the login.
+>   - **Pin** is on the tab's context menu, and needs the page to know its command (`HostedPage::commandId`).
+> - **The Customers page** (task 6, `pages/CustomersPage.{h,cpp}`, `IDD_PG_CUSTOMERS`):
+>   - **The logic** is the portable `pages/CustomersModel.{h,cpp}`, through Ar.h's functions as the dialog uses them. A new customer gets the default accounts (spec #6 D12); Save checks with `CheckCustomer` and refuses a taken number; Delete refuses a customer in use.
+>   - **The list:** virtual, with number, name and owed, filtered as you type.
+>   - **The fields:** customer, address, ship-to, terms and VAT (contact and VAT No. among them), and the accounts as lookups over the chart, with the dept and the account's name beside each.
+>   - **Open items:** the customer's, in a list.
+>   - **What changed:** no "already added, modify?" (D9), and a customer's number can't change once saved.
+>   - **Where it opens:** Accounts > Sales Customers (4059) opens the page; the old dialog stays as "Sales Customers (classic)" (`CM_AR_CUSTOMERS_CLASSIC`, following 4059's right) in the navigation pane.
+> - **Deviations:**
+>   - The page's New, Save and Delete are buttons on its form, not in the workspace's command bar.
+>   - The list's width is fixed (no splitter yet), and the open items stretch.
+>   - The history is the open items only, not a sales-lines tab.
+>   - Closing the program asks each dirty page in turn rather than listing them once.
+>   - `genproj.py` now picks up `gl/port/pages`.
+> - **`/checkres`, `/stress`** (task 7):
+>   - `/checkres` loads each page form as a child, checks its text fit and that every control has an anchor. Text fit runs at the system DPI, as for the dialogs.
+>   - `/stress` opens the Customers page in a hidden workspace 25 times: filter, select two customers, close.
+> - **Tests** (task 8, `gl_tests/test_ui.cpp`, 5 cases):
+>   - anchors; validators and amounts; lookup ranking; `GL_UISTATE`;
+>   - **criterion 1 of the Spec #6 sheet** through `CustomersModel`: C004 refused for its sales account, saved with dept 20, VAT 10 and terms 15, changed to terms 45 with no question; a taken number refused; C001 refused with "sales voucher 1 is theirs"; C004 deleted; C999 not found.
+>
+>   `gl_tests` 187.
+> - **Checked:**
+>   - Debug and Release `/W4 /WX` clean; the suites pass in both; `/checkres` 0 in both; `/stress` 0 (209 s).
+>   - Driven in the app on a scratch copy, by messages to its own windows:
+>     - **Start:** the pinned Customers page opened by itself.
+>     - **The list:** 3 customers; "reyes" filtered it to 1.
+>     - **C004:** refused with "Not an account in the chart." in the information bar and Sales marked. Dept 20 named the account (SALES REVENUE - GENERAL) and it saved (`ar_cust`: 410001-20, terms 15, VAT 10). Terms 45 saved with nothing asked.
+>     - **Delete:** asked in a task dialog and deleted C004. C001 showed its open item S-1003 and was refused with the sheet's wording.
+>     - **Unsaved changes:** an edited name marked the tab "•"; Close Children asked, and Don't save closed the page with `ar_cust` unchanged.
+>     - **Classic:** "Sales Customers (classic)" opened dialog 1052.
+>     - **State, over three runs:** the program created `GL_UISTATE` and saved the window maximized. A pin added between runs reopened the page maximized, and `active` and `pins` were saved.
+>
+>     Screenshots checked the refused save (the marked label, the bar) and C001's refusal with its open items.
+> - **Not driven:**
+>   - typing into a lookup to open its list, and the keys Enter-to-next-field and Ctrl+S (the drive sends no keystrokes);
+>   - Pin from the tab menu (the restore was checked by seeding the pin);
+>   - `DateField`, which no M1 page uses.
+> - **Seen once, not reproduced:** in the first full run a box titled "Takeda Chemical Industries, Ltd." (the program's About box, dialog 1008) was on screen after the first refused save. Two reruns of the same steps, one starting exactly as that run did, opened no window. The screenshot copies the screen, so it may not have been this process's.
 
 **Goal:** the page pattern exists, and one list-and-detail screen, Customers, uses it end to end.
 

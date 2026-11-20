@@ -13,6 +13,7 @@
 #include "ResourceCheck.h"
 #include "Commands.h"
 #include "CommandsMenu.h"
+#include "pages/CustomersPage.h"
 
 #include "PortIds.h"
 
@@ -358,6 +359,37 @@ protected:
     bool OnDestroy() override { return true; }   // not the main window
 };
 
+// Spec #8 S8-M1: each page's form loads as a child, its captions fit, and
+// every control has an anchor.
+void checkPages(HINSTANCE inst, Report& r)
+{
+    HWND parent = CreateWindowExW(0, L"STATIC", L"page check", WS_POPUP, 0, 0, 800, 600, nullptr, nullptr, inst, nullptr);
+    struct PageCase {
+        int id;
+        const wchar_t* what;
+        const std::vector<std::pair<int, unsigned>>& anchors;
+    };
+    const PageCase pages[] = {{IDD_PG_CUSTOMERS, L"Customers page", CustomersPageAnchors()}};
+    for (const PageCase& p : pages) {
+        HWND form = CreateDialogParamW(inst, MAKEINTRESOURCEW(p.id), parent, ProbeProc, 0);
+        r.check(form && isChildTemplate(form), fx::Format(L"page %d, %s: the form loads as a child", p.id, p.what));
+        if (!form) continue;
+        const auto problems = checkTextFit(form);
+        for (const FitProblem& f : problems)
+            r.check(false, fx::Format(f.lines ? L"page %d, control %d \"%s\": text wraps to %d px high, room %d px"
+                                              : L"page %d, control %d \"%s\": text too wide: %d px, room %d px",
+                                      p.id, f.id, f.text.c_str(), f.need, f.room));
+        if (problems.empty()) r.check(true, fx::Format(L"page %d: every caption fits", p.id));
+        const std::vector<int> loose = fx::Layout::Unanchored(form, p.anchors);
+        std::wstring ids;
+        for (int id : loose) ids += L" " + std::to_wstring(id);
+        r.check(loose.empty(), fx::Format(L"page %d: every control has an anchor%s", p.id,
+                                          loose.empty() ? L"" : (L" (missing:" + ids + L")").c_str()));
+        DestroyWindow(form);
+    }
+    DestroyWindow(parent);
+}
+
 void checkWorkspace(HINSTANCE inst, Report& r)
 {
     fx::MenuGuard menu(BuildCommandMenu());
@@ -466,6 +498,7 @@ int RunResourceCheck(HINSTANCE inst, bool quiet)
     checkDialogs(inst, r);
     checkMenus(inst, r);
     checkWorkspace(inst, r);
+    checkPages(inst, r);
     checkImages(inst, r);
     checkStrings(inst, r);
     if (!quiet) {
