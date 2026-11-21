@@ -80,6 +80,12 @@ public:
     // Setting it clears the grid to that many blank rows.
     void SetFixedRows(int count);
     int fixedRows() const noexcept { return fixed_; }
+    // A read-only grid (spec #10 D2): the rows SetRows gives, any number (none
+    // included), with no blank row; no cell can be edited, and Insert,
+    // Ctrl+Delete and Ctrl+Z do nothing. The keys move between the rows, and
+    // Tab or Enter on the last row stays there. Setting it clears the grid.
+    void SetReadOnly(bool readOnly);
+    bool readOnly() const noexcept { return readOnly_; }
     int Rows() const noexcept { return static_cast<int>(rows_.size()); }   // with the blank row at the end, if not fixed
     int Lines() const;                                                      // rows with any text
     bool IsBlank(int row) const;
@@ -133,6 +139,7 @@ private:
     std::vector<std::pair<int, std::vector<std::string>>> removed_;   // (row, cells)
     int row_ = 0, col_ = 0;
     int fixed_ = 0;
+    bool readOnly_ = false;
     bool editing_ = false;
     std::string edit_, message_;
 };

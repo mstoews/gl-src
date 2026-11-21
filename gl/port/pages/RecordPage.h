@@ -18,7 +18,12 @@
 #include <vector>
 
 enum class FieldKind { Text, Upper, Number, Decimal, Amount, Date, Choice, Account, Password, ReadOnly };
-enum class FieldFlag { None, Required, Key, KeyPart };   // Key: required, and read-only once saved; KeyPart: read-only once saved
+// Key: required, and read-only once saved; KeyPart: read-only once saved.
+// Input (spec #10 D5): a command's input, not part of the record: the model
+// gets it (RecordModel::InputDefaults, then what's typed) and its read-only
+// fields may show what follows from it, but it never makes the page dirty,
+// Save doesn't check it, and choosing another record starts it again.
+enum class FieldFlag { None, Required, Key, KeyPart, Input };
 
 struct FieldDesc {
     int id;            // the edit, combo box or date picker

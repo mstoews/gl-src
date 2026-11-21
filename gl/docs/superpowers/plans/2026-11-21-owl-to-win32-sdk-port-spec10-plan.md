@@ -3,7 +3,7 @@
 **Spec reference:** `gl/docs/superpowers/specs/2026-11-19-owl-to-win32-sdk-port-spec8-design.md`, §5.1 (list and detail) and §5.3 (task pages), as Spec #9 applied them. This plan adds no design of its own beyond the decisions in [Decisions](#decisions) below.
 **Gap:** the Spec #9 sheet's K4 (Transaction Inquiry is still a dialog), and the three other menu commands that still open a dialog rather than a page: Fixed Assets > Disposal, Accounts > Statement Layout and the right-click menu's Delete Accounts.
 **Date:** 2026-11-21
-**Plan status:** Reviewed; Q1–Q5 answered as assumed (2026-11-21). Ready for S10-M0.
+**Plan status:** Reviewed; Q1–Q5 answered as assumed (2026-11-21). S10-M0 built.
 
 **Paths:** relative to the repository root. The screens today:
 
@@ -80,6 +80,23 @@ S is less than a day, M is 1–3 days. **Parallel work:** M3 needs only Spec #8'
 ---
 
 ## Milestone 0 — Read-only grids and action inputs on a record page
+
+> **As built (2026-11-21; built and run on Windows 11, VS 18, v145).**
+> - **Read-only grids** (task 2, D2): `EntryGridModel::SetReadOnly(bool)`.
+>   - **The rows:** exactly what `SetRows` gives, none included, with no blank row; `Clear` leaves none.
+>   - **The keys:** no cell begins an edit (F2, typing, a double-click); Insert, Ctrl+Delete and Ctrl+Z do nothing. Tab, Enter, Up, Down and Shift+Tab move between the rows; Tab or Enter on the last row stays there. With no rows, nothing moves and nothing breaks (`SetCurrent` and the row keys clamp to row 0).
+>   - **On the page:** a read-only grid's changes refresh it but never mark the page dirty (`RecordPages.cpp`, the grid's `OnChanged`). Nothing else changes: Save's `CommitGrids` finds it never editing.
+>   - **Deviation:** the plan had `make_pages.py` declare the grid read-only. The model already owns the grid (Budget's fixed rows are set the same way), so the form needs nothing new.
+> - **Inputs** (task 3, D5): `FieldFlag::Input` (`'i'` in `make_pages.py`).
+>   - **What the page does:** a change to an input clears its mark and refreshes the read-only fields, but doesn't make the page dirty (`RecordPage::Changed`, used by edits, choices, dates and account lookups). Save doesn't check inputs. `RecordPage::InputsValid(tab)` checks them for a command and marks the bad ones (for M2's Dispose).
+>   - **Their values:** `RecordModel::InputDefaults(key)`, set on `New` and `Select` after the record is read, so an input starts again on each record and after a save.
+>   - **Deviation:** no `Computed(values)` hook. A read-only field that follows an input is the model's `Get`, as Fixed Assets' Monthly and Book value already are, and the page already shows read-only fields again after every change (`RefreshDerived`).
+> - **The tab check page** (task 4) gains a **History** tab (a read-only grid: three lines for A1, none for B2) and a **Try** tab (Rate %, an input defaulting to 10, and Result, the amount at that rate). `/stress` types into the History grid and into Rate %, and fails if either makes the page dirty.
+> - **Tests** (`gl_tests` 241, 2 new):
+>   - **`test_grid.cpp`:** a read-only grid with no rows, then three, then one, then none: every key, no edit, the totals, and back to normal.
+>   - **`test_pages.cpp`:** an input's default on New and Select (overriding a stale stored value), a derived field following it, and Save not storing it.
+> - **The existing pages:** their forms and descriptors are unchanged.
+> - **Checked:** Debug and Release `/W4 /WX` clean. `gl_tests` 241, `cb4sqlite_tests` 79 and `report_tests` 19 pass in both. `/checkres`, `/checkaccess` and `/stress` exit 0 in both.
 
 **Goal:** the two framework pieces M1 and M2 need.
 

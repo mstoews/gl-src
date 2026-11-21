@@ -486,3 +486,85 @@ TEST_CASE("Chart of Accounts page: the Budget tab is Budget Data (S9-M1, spec #2
     CHECK(scalar(db.code, "SELECT budget3 FROM glaccts WHERE trim(account) = '998000'") == "300.0");
     CHECK(g->Cell(2, "budget") == "300.00");
 }
+
+namespace {
+
+// A record with an input (spec #10 D5: FieldFlag::Input): Rate % isn't
+// stored; Result follows it (the amount at that rate), as a read-only field.
+class InputRecordModel : public RecordModel {
+public:
+    explicit InputRecordModel(Code4& code) : RecordModel(code)
+    {
+        store_["A1"] = {{"code", "A1"}, {"amount", "1,000.00"}};
+        store_["B2"] = {{"code", "B2"}, {"amount", "200.00"}, {"rate", "99"}};   // a stale value: inputs win
+    }
+    std::string Noun() const override { return "record"; }
+    std::string Get(const std::string& field) const override
+    {
+        if (field != "result") return RecordModel::Get(field);
+        return record::Cents(record::ToCents(RecordModel::Get("amount")) * record::ToInt(RecordModel::Get("rate")) / 100);
+    }
+    std::map<std::string, Values> store_;
+
+protected:
+    std::vector<RecordRow> LoadRows() override
+    {
+        std::vector<RecordRow> rows;
+        for (const auto& [key, v] : store_) rows.push_back({key, {key}});
+        return rows;
+    }
+    bool Read(const std::string& key, Values& out) override
+    {
+        const auto it = store_.find(key);
+        if (it == store_.end()) return false;
+        out = it->second;
+        return true;
+    }
+    std::string KeyOf(const Values& v) const override { return value(v, "code"); }
+    std::string KeyField() const override { return "code"; }
+    Result Write(Values& v, bool) override
+    {
+        store_[value(v, "code")] = {{"code", value(v, "code")}, {"amount", value(v, "amount")}};   // not the input
+        return {true, "", ""};
+    }
+    Result Remove(const std::string& key) override
+    {
+        store_.erase(key);
+        return {true, "", ""};
+    }
+    Values InputDefaults(const std::string& key) override { return {{"rate", key == "A1" ? "10" : "5"}}; }
+};
+
+} // namespace
+
+TEST_CASE("Record page inputs: set on New and Select, followed by derived fields, not saved (S10-M0)", "[pages]")
+{
+    Code4 code;   // in memory
+    InputRecordModel m(code);
+    m.Load();
+
+    m.New();
+    CHECK(m.Get("rate") == "5");
+    CHECK(m.Get("result").empty());
+
+    REQUIRE(m.Select("A1"));
+    CHECK(m.Get("rate") == "10");
+    CHECK(m.Get("result") == "100.00");
+    m.Set("rate", "25");   // typed: what follows from it changes
+    CHECK(m.Get("result") == "250.00");
+
+    REQUIRE(m.Select("B2"));
+    CHECK(m.Get("rate") == "5");   // the input's default, not what Read found
+    CHECK(m.Get("result") == "10.00");
+
+    // Saving keeps the record's fields; the input starts again.
+    REQUIRE(m.Select("A1"));
+    m.Set("rate", "50");
+    m.Set("amount", "2,000.00");
+    const RecordModel::Result r = m.Save();
+    REQUIRE(r.ok);
+    CHECK(m.store_["A1"].count("rate") == 0);
+    CHECK(m.Get("amount") == "2,000.00");
+    CHECK(m.Get("rate") == "10");
+    CHECK(m.Get("result") == "200.00");
+}

@@ -255,6 +255,8 @@ const PageDesc k_tabCheck{
         {21012, "note", FieldKind::Text, 30, FieldFlag::None, 0, 0},
         {21013, "amount", FieldKind::Amount, 16, FieldFlag::None, 0, 0},
         {21014, "account", FieldKind::Account, 7, FieldFlag::None, 21300, 21200},
+        {21015, "rate", FieldKind::Number, 3, FieldFlag::Input, 0, 0},
+        {21016, "result", FieldKind::ReadOnly, 16, FieldFlag::None, 0, 0},
     },
     {
         {IDC_PG_NEW, m::kTopLeft}, {IDC_PG_SAVE, m::kTopLeft}, {IDC_PG_DELETE, m::kTopLeft},
@@ -262,10 +264,11 @@ const PageDesc k_tabCheck{
         {21011, m::kTopLeft}, {21004, m::kTopWide}, {21101, m::kTopLeft}, {21400, m::kTopLeft},
         {21012, m::kTopLeft}, {21401, m::kTopLeft}, {21013, m::kTopLeft}, {21102, m::kTopLeft},
         {21402, m::kTopLeft}, {21300, m::kTopLeft}, {21200, m::kTopLeft}, {21014, m::kTopLeft},
-        {21005, m::kAll},
+        {21005, m::kAll}, {21006, m::kAll}, {21103, m::kTopLeft}, {21403, m::kTopLeft}, {21015, m::kTopLeft},
+        {21404, m::kTopLeft}, {21016, m::kTopLeft},
     },
     {},
-    {{L"Details", 0, "", {21101, 21400, 21012, 21401, 21013, 21102, 21402, 21300, 21200, 21014}}, {L"Budget", 21005, "budget", {21005}}},
+    {{L"Details", 0, "", {21101, 21400, 21012, 21401, 21013, 21102, 21402, 21300, 21200, 21014}}, {L"Budget", 21005, "budget", {21005}}, {L"History", 21006, "history", {21006}}, {L"Try", 0, "", {21103, 21403, 21015, 21404, 21016}}},
 };
 
 const PageDesc k_users{

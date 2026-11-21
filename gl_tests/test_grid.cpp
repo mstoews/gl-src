@@ -245,3 +245,64 @@ TEST_CASE("Entry grid: fixed rows have no blank row and no Insert or Ctrl+Delete
     CHECK(g.Rows() == 1);
     CHECK(g.Key(GridKey::Insert) == GridAction::Inserted);
 }
+
+TEST_CASE("Entry grid: a read-only grid shows any rows and takes no edit (S10-M0)", "[grid]")
+{
+    m::EntryGridModel g({{"period", "Pd", m::CellKind::Number, 4},
+                         {"descript", "Description", m::CellKind::Text, 30},
+                         {"amount", "Amount", m::CellKind::Amount, 16, false, true}});
+    int changes = 0;
+    g.OnChanged = [&] { ++changes; };
+    g.SetReadOnly(true);
+    CHECK(g.readOnly());
+    CHECK(g.Rows() == 0);   // no blank row
+    CHECK(changes == 1);
+
+    // No rows: the keys do nothing, and nothing breaks.
+    CHECK(g.Key(GridKey::Down) == GridAction::None);
+    CHECK(g.Key(GridKey::Up) == GridAction::None);
+    g.SetCurrent(5, 2);
+    CHECK(g.row() == 0);
+    CHECK_FALSE(g.BeginEdit(false));
+
+    // Any number of rows, exactly as given.
+    g.SetRows({{"1", "Opening", "1,000.00"}, {"4", "A change", "250.00"}, {"7", "Another", "-500.00"}});
+    CHECK(g.Rows() == 3);
+    CHECK(g.Lines() == 3);
+    CHECK(g.Total("amount") == 75000);
+
+    // No cell takes an edit; F2 and the row keys do nothing to the rows.
+    CHECK_FALSE(g.BeginEdit(true));
+    CHECK(g.Key(GridKey::F2) == GridAction::None);
+    CHECK(g.Key(GridKey::Insert) == GridAction::None);
+    CHECK(g.Key(GridKey::CtrlDelete) == GridAction::None);
+    CHECK(g.Key(GridKey::CtrlZ) == GridAction::None);
+    CHECK(g.Rows() == 3);
+
+    // The keys move between the rows; Tab and Enter on the last row stay there.
+    CHECK(g.row() == 0);
+    CHECK(g.Key(GridKey::Tab) == GridAction::Moved);
+    CHECK(g.row() == 1);
+    CHECK(g.Key(GridKey::Enter) == GridAction::Moved);
+    CHECK(g.row() == 2);
+    CHECK(g.Key(GridKey::Enter) == GridAction::Moved);
+    CHECK(g.row() == 2);
+    CHECK(g.Key(GridKey::Down) == GridAction::None);
+    CHECK(g.Key(GridKey::ShiftTab) == GridAction::Moved);
+    CHECK(g.row() == 1);
+    CHECK(g.Key(GridKey::Up) == GridAction::Moved);
+    CHECK(g.row() == 0);
+
+    // Fewer rows next time, then none.
+    g.SetRows({{"2", "One line", "5.00"}});
+    CHECK(g.Rows() == 1);
+    g.SetRows({});
+    CHECK(g.Rows() == 0);
+    g.Clear();
+    CHECK(g.Rows() == 0);
+
+    // Back to the usual grid: the blank row returns and takes an edit.
+    g.SetReadOnly(false);
+    CHECK(g.Rows() == 1);
+    CHECK(g.BeginEdit(false));
+}

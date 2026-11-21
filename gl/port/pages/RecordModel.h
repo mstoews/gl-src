@@ -78,6 +78,10 @@ protected:
 
     virtual std::vector<RecordRow> LoadRows() = 0;
     virtual Values Defaults() { return {}; }
+    // The inputs' values (FieldFlag::Input, spec #10 D5) for the record `key`
+    // ("" for a new one), set on New and Select. A read-only field that
+    // follows from an input is the model's Get, as any derived field is.
+    virtual Values InputDefaults(const std::string& /*key*/) { return {}; }
     virtual bool Read(const std::string& key, Values& out) = 0;
     // The key a record's values make (the fields flagged Key / KeyPart).
     virtual std::string KeyOf(const Values& v) const = 0;
