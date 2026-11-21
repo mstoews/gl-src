@@ -145,6 +145,11 @@ bool isEditable(const FieldDesc& f)
     return f.kind != FieldKind::ReadOnly;
 }
 
+bool isInput(const FieldDesc* f)
+{
+    return f && f->flag == FieldFlag::Input;
+}
+
 bool isKey(const FieldDesc& f)
 {
     return f.flag == FieldFlag::Key || f.flag == FieldFlag::KeyPart;
@@ -200,6 +205,14 @@ public:
     }
     void SelectShown(int row) { SelectRow(row); }
     int shownCount() const { return static_cast<int>(shown_.size()); }
+    // /stress: type into the field `key`; true if the page stays clean (an input, spec #10 D5).
+    bool TypeInField(const char* key, const std::string& text)
+    {
+        const FieldDesc* f = fieldOfKey(key);
+        if (!f) return false;
+        SetText(f->id, text);
+        return !IsDirty();
+    }
     // /stress: choose a tab; type into the current cell of its grid, then Tab.
     void ChooseTab(int tab) { ShowTab(tab); }
     int tabCount() const { return static_cast<int>(d_.tabs.size()); }
@@ -240,6 +253,11 @@ private:
     void FillCommands();
     void Read();
     void RefreshDerived();
+    void Changed(int id);   // a field changed: dirty (unless it's an input), its mark cleared, derived fields shown
+public:
+    // A command's inputs (spec #10 D5) on the tab `tab` (-1: all) pass their checks; if not, they're marked.
+    bool InputsValid(int tab);
+private:
     void ShowAccountName(const FieldDesc& f);
     bool SwitchAllowed();
     void SelectRow(int row);
@@ -343,8 +361,7 @@ bool RecordPage::OnInitPage()
                     SetText(fp->dept, it.sub);
                     SetText(fp->name, it.name);
                 }
-                SetDirty(true);
-                ClearMark(fp->id);
+                Changed(fp->id);
             });
             lookups_[f.id] = std::move(l);
         }
@@ -385,9 +402,9 @@ bool RecordPage::OnInitPage()
             };
             fx::SetAccessibleName(Item(d_.tabs[i].grid), std::wstring(d_.tabs[i].caption) + L" grid");
             fx::EntryGrid* gp = grid.get();
-            g->OnChanged = [this, gp] {
+            g->OnChanged = [this, gp, g] {
                 if (filling()) return;
-                SetDirty(true);
+                if (!g->readOnly()) SetDirty(true);   // a read-only grid (spec #10 D2) is only shown
                 gp->Refresh();
             };
             grid->OnAction = [this, gp](m::GridAction a) {
@@ -580,11 +597,34 @@ void RecordPage::RefreshDerived()
         if (f.kind == FieldKind::ReadOnly) SetText(f.id, model_->Get(f.key));
 }
 
-void RecordPage::OnFieldChanged(int id)
+void RecordPage::Changed(int id)
 {
-    fx::Page::OnFieldChanged(id);
+    if (isInput(fieldOf(id))) ClearMark(id);
+    else fx::Page::OnFieldChanged(id);   // dirty, the mark cleared
     Read();
     RefreshDerived();
+}
+
+void RecordPage::OnFieldChanged(int id)
+{
+    Changed(id);
+}
+
+bool RecordPage::InputsValid(int tab)
+{
+    bool ok = true;
+    int firstBad = 0;
+    for (const FieldDesc& f : d_.fields)
+        if (isInput(&f) && (tab < 0 || TabOf(f.id) == tab) && f.kind != FieldKind::Choice &&
+            f.kind != FieldKind::Date && !Validate(f.id)) {
+            if (ok) firstBad = f.id;
+            ok = false;
+        }
+    if (!ok) {
+        if (TabOf(firstBad) >= 0) ShowTab(TabOf(firstBad));
+        ShowInfo(fx::InfoKind::Error, L"Check the marked fields: hover over one to see what's wrong.");
+    }
+    return ok;
 }
 
 bool RecordPage::Save()
@@ -595,7 +635,8 @@ bool RecordPage::Save()
     bool ok = true;
     int firstBad = 0;
     for (const FieldDesc& f : d_.fields)
-        if (isEditable(f) && f.kind != FieldKind::Choice && f.kind != FieldKind::Date && !Validate(f.id)) {
+        if (isEditable(f) && !isInput(&f) && f.kind != FieldKind::Choice && f.kind != FieldKind::Date &&
+            !Validate(f.id)) {
             if (ok) firstBad = f.id;
             ok = false;
         }
@@ -780,10 +821,7 @@ bool RecordPage::OnFormCommand(WORD id, WORD code, HWND)
         for (const FieldDesc& f : d_.fields)
             if (f.kind == FieldKind::Account && f.dept == id) ShowAccountName(f);
     if (code == CBN_SELCHANGE && !filling()) {
-        SetDirty(true);
-        ClearMark(id);
-        Read();
-        RefreshDerived();
+        Changed(id);
         return true;
     }
     if (code == EN_KILLFOCUS && users()) {
@@ -806,10 +844,7 @@ bool RecordPage::OnFormNotify(NMHDR* nm, LRESULT& result)
     for (auto& [id, grid] : grids_)
         if (grid->OnNotify(nm, result)) return true;
     if (nm->code == DTN_DATETIMECHANGE && !filling()) {
-        SetDirty(true);
-        ClearMark(static_cast<int>(nm->idFrom));
-        Read();
-        RefreshDerived();
+        Changed(static_cast<int>(nm->idFrom));
         return false;
     }
     if (commands_ && nm->hwndFrom == commands_ && nm->code == LVN_ITEMCHANGED) {
@@ -876,6 +911,9 @@ bool RecordPage::OnMessage(UINT msg, WPARAM wp, LPARAM lp, LRESULT& result)
 // The tab check page's record (spec #9 S9-M0): in memory, a code, a name, a
 // Details tab (a note, an amount, an account) and a Budget tab (12 periods).
 // Its grid is Budget Data's (spec #9 D1, D2), so the check is the real shape.
+// Spec #10 S10-M0: a History tab, a read-only grid of any number of rows (D2,
+// the Activity tab's shape), and a Try tab, an input (Rate %) and the field
+// that follows it (Result: the amount at that rate) (D5, Disposal's shape).
 class TabCheckModel : public RecordModel {
 public:
     explicit TabCheckModel(cb4sqlite::Code4& code) : RecordModel(code)
@@ -885,11 +923,24 @@ public:
                           {"current", "Current Year", m::CellKind::Amount, 16, true},
                           {"previous", "Previous Year", m::CellKind::Amount, 16, true}});
         grid_.SetFixedRows(12);
+        history_.SetColumns({{"period", "Pd", m::CellKind::Number, 4, true},
+                             {"descript", "Description", m::CellKind::Text, 30, true},
+                             {"amount", "Amount", m::CellKind::Amount, 16, true}});
+        history_.SetReadOnly(true);
         store_["A1"] = {{"code", "A1"}, {"name", "First"}, {"note", "a note"}, {"amount", "1,250.00"}};
         store_["B2"] = {{"code", "B2"}, {"name", "Second"}};
     }
     std::string Noun() const override { return "check record"; }
-    m::EntryGridModel* Grid(const std::string& key) override { return key == "budget" ? &grid_ : nullptr; }
+    m::EntryGridModel* Grid(const std::string& key) override
+    {
+        return key == "budget" ? &grid_ : key == "history" ? &history_ : nullptr;
+    }
+    std::string Get(const std::string& field) const override
+    {
+        if (field != "result") return RecordModel::Get(field);
+        const std::int64_t cents = record::ToCents(RecordModel::Get("amount")) * record::ToInt(RecordModel::Get("rate")) / 100;
+        return record::Cents(cents);
+    }
 
 protected:
     std::vector<RecordRow> LoadRows() override
@@ -927,10 +978,15 @@ protected:
             rows.push_back({std::to_string(r),
                             it == store_.end() ? std::string() : value(it->second, "budget" + std::to_string(r))});
         grid_.SetRows(rows);
+        std::vector<std::vector<std::string>> history;   // A1 has three lines, the others none
+        if (key == "A1")
+            history = {{"1", "Opening", "1,000.00"}, {"4", "A change", "250.00"}, {"7", "Another", "-500.00"}};
+        history_.SetRows(history);
     }
+    Values InputDefaults(const std::string&) override { return {{"rate", "10"}}; }
 
 private:
-    m::EntryGridModel grid_;
+    m::EntryGridModel grid_, history_;
     std::map<std::string, Values> store_;
 };
 
@@ -1049,6 +1105,11 @@ int StressRecordPages(int times)
         p->TypeInGrid(1, "125");
         p->ChooseTab(0);
         if (p->IsDirty() && !p->Save()) return false;   // saved, so choosing another asks nothing
+        p->ChooseTab(2);                                 // the read-only History grid (spec #10 D2)
+        p->TypeInGrid(2, "9");                           // takes nothing...
+        if (p->IsDirty()) return false;                  // ...and leaves the page clean
+        p->ChooseTab(3);
+        if (!p->TypeInField("rate", "25")) return false; // an input (D5): still clean
         p->SelectShown(1);
         p->ChooseTab(1);
         w.ClosePage(h);

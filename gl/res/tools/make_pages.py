@@ -22,6 +22,9 @@ tab's own groups, or a grid (an entry grid's ListView, the model's
 EntryGridModel by its key). The page shows one tab's controls at a time, so
 every control in a tab, labels included, has an ID.
 
+A tab's grid is read-only (spec #10 D2) when its model says so
+(EntryGridModel::SetReadOnly): the form is the same.
+
 A page with `nolist` (spec #9 S9-M2: Company Profile) is one record: no
 filter, no list, no New or Delete; its groups and tabs start at the left
 edge (x 4) instead of beside the list.
@@ -31,7 +34,8 @@ import sys
 
 # A field: (key, label, kind, width in characters, flags)
 #   kinds: text upper number decimal amount date choice account password readonly
-#   flags: 'k' the record's key (required; read-only once saved), 'r' required
+#   flags: 'k' the record's key (required; read-only once saved), 'r' required,
+#          'i' a command's input (spec #10 D5): not saved, never makes the page dirty
 REPS = lambda what: [
     (1, what, [('code', 'C&ode:', 'upper', 5, 'k'), ('shortName', 'S&hort name:', 'upper', 12, ''),
                ('name', 'N&ame:', 'text', 40, ''), ('territory', 'Te&rritory:', 'text', 10, '')]),
@@ -123,7 +127,11 @@ PAGES = [
          tabs=[dict(caption='Details', groups=[(1, 'Details', [('note', 'N&ote:', 'text', 30, ''),
                                                               ('amount', 'A&mount:', 'amount', 16, '')]),
                                               (2, 'Account', [('account', 'A&ccount:', 'account', 7, '')])]),
-               dict(caption='Budget', grid='budget')]),
+               dict(caption='Budget', grid='budget'),
+               # Spec #10 S10-M0: a read-only grid (D2), and an input with a field that follows it (D5).
+               dict(caption='History', grid='history'),
+               dict(caption='Try', groups=[(1, 'Try it (not saved)', [('rate', '&Rate %:', 'number', 3, 'i'),
+                                                                     ('result', 'Result:', 'readonly', 16, '')])])]),
     dict(name='users', idd='IDD_PG_USERS', title='Users', commands=True,
          columns=[('User', 56, 0), ('Description', 150, 0)],
          groups=[(1, 'User', [('username', '&User:', 'upper', 10, 'k'), ('descript', 'D&escription:', 'text', 30, ''),
@@ -210,7 +218,7 @@ def build_groups(groups, columns_y, ids, body, fields, anchors, in_tab, left=188
             anchors.append((str(fid), 'kTopLeft'))
             made.append(fid)
             flag = 'FieldFlag::Key' if 'k' in flags else 'FieldFlag::KeyPart' if 'K' in flags else \
-                'FieldFlag::Required' if 'r' in flags else 'FieldFlag::None'
+                'FieldFlag::Required' if 'r' in flags else 'FieldFlag::Input' if 'i' in flags else 'FieldFlag::None'
             fields.append('{%d, "%s", FieldKind::%s, %d, %s, %d, %d}' % (fid, key, KIND[kind], chars, flag, dept, name))
             ids.field += 1
             y += 14
