@@ -3,7 +3,7 @@
 **Spec reference:** `gl/docs/superpowers/specs/2026-11-19-owl-to-win32-sdk-port-spec8-design.md`, §5.1 (list and detail) and §5.3 (task pages), as Spec #9 applied them. This plan adds no design of its own beyond the decisions in [Decisions](#decisions) below.
 **Gap:** the Spec #9 sheet's K4 (Transaction Inquiry is still a dialog), and the three other menu commands that still open a dialog rather than a page: Fixed Assets > Disposal, Accounts > Statement Layout and the right-click menu's Delete Accounts.
 **Date:** 2026-11-21
-**Plan status:** Draft, for review. Q1–Q5 are open; the plan assumes the answer given with each.
+**Plan status:** Reviewed; Q1–Q5 answered as assumed (2026-11-21). Ready for S10-M0.
 
 **Paths:** relative to the repository root. The screens today:
 
@@ -53,15 +53,15 @@ If a milestone finds the design wrong for one of these screens, **stop, fix the 
 
 ---
 
-## Questions (open)
+## Questions (answered 2026-11-21)
 
-Each has the answer the plan assumes.
+The user confirmed each assumption.
 
-- **Q1 The Activity tab's layout.** The dialog shows "Opening Account Balance" on row 1, two blank rows, the lines from row 4, a blank row, then "Account Balance", each balance in Debit when positive, else in Credit. Keep that, or a plainer grid: an "Opening balance" row, the lines, a "Totals" row (the lines' debits and credits) and a "Balance" row? **Assumed: the plainer grid.** The figures are the same; the Spec #2 sheet's #9 gains a redesign row saying where each is.
-- **Q2 Opening a voucher from the Activity tab.** Should Enter on a line open that voucher (the GL Voucher page, read-only for a posted voucher)? **Assumed: no,** not in this plan: the dialog didn't, and it is new behaviour.
-- **Q3 Disposal's entry.** Should Dispose also open a new GL voucher with the entry filled in, rather than showing it to type? **Assumed: no:** Spec #4 D7 (the screen posts nothing) stands.
-- **Q4 Statement Layout editing.** Edit the lines in the grid (D6), or keep the dialog's fields under a read-only grid with Apply? **Assumed: in the grid.** The Spec #3 sheet's #8 steps change wording ("set Ranges in line 90's row" for "set Ranges, then Apply"), not figures.
-- **Q5 Delete Accounts on the right-click menu.** Keep the GLSUB entry (opening the Chart of Accounts page), or remove it? **Assumed: keep it,** opening the page: removing a command is Spec #8's removals' business.
+- **Q1 The Activity tab's layout.** The dialog shows "Opening Account Balance" on row 1, two blank rows, the lines from row 4, a blank row, then "Account Balance", each balance in Debit when positive, else in Credit. Keep that, or a plainer grid: an "Opening balance" row, the lines, a "Totals" row (the lines' debits and credits) and a "Balance" row? **Answered: the plainer grid.** The figures are the same; the Spec #2 sheet's #9 gains a redesign row saying where each is.
+- **Q2 Opening a voucher from the Activity tab.** Should Enter on a line open that voucher (the GL Voucher page, read-only for a posted voucher)? **Answered: no,** not in this plan: the dialog didn't, and it is new behaviour.
+- **Q3 Disposal's entry.** Should Dispose also open a new GL voucher with the entry filled in, rather than showing it to type? **Answered: no:** Spec #4 D7 (the screen posts nothing) stands.
+- **Q4 Statement Layout editing.** Edit the lines in the grid (D6), or keep the dialog's fields under a read-only grid with Apply? **Answered: in the grid.** The Spec #3 sheet's #8 steps change wording ("set Ranges in line 90's row" for "set Ranges, then Apply"), not figures.
+- **Q5 Delete Accounts on the right-click menu.** Keep the GLSUB entry (opening the Chart of Accounts page), or remove it? **Answered: keep it,** opening the page: removing a command is Spec #8's removals' business.
 
 ---
 
